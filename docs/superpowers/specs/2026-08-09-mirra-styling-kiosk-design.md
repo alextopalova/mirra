@@ -27,15 +27,16 @@
 ## 4. Core user flow (kiosk)
 
 1. **Walk-up / start screen** — big "Start your style scan" CTA; idle attract-loop.
-2. **Capture** — front photo, side photo, height, optional weight. (Side photo recovers torso depth; height scales measurements; no self-report quiz.)
+2. **Capture** — front photo, side photo, height, weight. (Side photo recovers torso depth; height scales measurements; weight feeds the BMI signal for the Apple / firm-vs-soft axis; no self-report quiz.)
 3. **Diagnosis** (parallel):
    - Selfie → **Facial Color Tones** → personal-color palette / season.
    - Selfie → **Face Attributes & Ratio** → face shape → neckline/collar preferences. *(First add-on; see scope.)*
    - Front+side photos + height/weight → **custom body classifier** → dual output: fruit shape + Japanese 3-type (weighted).
 4. **Style report** — shows palette, body profile ("Hourglass · Wave-leaning"), and the styling rules derived from them.
 5. **Shop** — user picks a category (top / dress / pants) and occasion; Mirra ranks store inventory on color × body fit.
-6. **Try-on** — user taps the top pick → **Apparel VTO** renders it on their photo → "Add to bag / Buy."
-7. **Reset** — "Next customer" clears session.
+6. **Try-on (virtual, first)** — user taps a pick → **Apparel VTO** renders it on their photo, right on the mirror. This is the kiosk's core value: try before you commit — no undressing, no fitting-room queue. Users can rapidly try several picks.
+7. **Get it** — once they love one, the kiosk shows **where to find it on the floor** (in-store `location`/section) and offers **Add to bag / request my size / buy for delivery** (handoff, no real payment in MVP). Handles the "in a hurry / long queue / out of my size" cases.
+8. **Reset** — "Next customer" clears session.
 
 ## 5. The hero: dual body classifier (custom, runs client-side)
 
@@ -110,6 +111,8 @@ Final rank = weighted sum; top N shown; #1 offered for VTO try-on.
   "season_tags": ["autumn", "spring"],
   "silhouette": { "structured": true, "fabric": "crisp", "neckline": "v", "waist": "regular" },
   "occasion_tags": ["work", "smart-casual"],
+  "location": "Women's · Aisle 3 · Shirts",   // in-store shelf/section for the "Get it" step
+  "sizes_in_stock": ["S", "M", "L"],
   "buy_url": "https://..."
 }
 ```
@@ -134,7 +137,7 @@ Final rank = weighted sum; top N shown; #1 offered for VTO try-on.
 2. Custom dual body classifier (fruit + Japanese 3-type). ← hero
 3. Facial Color Tones → palette.
 4. Catalog match (color × body) with category + occasion selectors.
-5. Apparel VTO try-on of the top pick → Buy.
+5. Apparel VTO virtual try-on of picks, then a "Get it" step (in-store location + add to bag / buy handoff).
 6. Deployed public URL.
 
 **First add-ons (clean seams, once spine works):**
@@ -170,8 +173,9 @@ Final rank = weighted sum; top N shown; #1 offered for VTO try-on.
 ## 13. Demo script (for the video)
 
 1. Walk up to the "mirror," tap Start.
-2. Snap front + side, enter height. (Narrate: "no measuring tape, no quiz.")
+2. Snap front + side, enter height + weight. (Narrate: "no measuring tape, no quiz.")
 3. Reveal: "Autumn palette · Hourglass, Wave-leaning."
 4. Pick "dress · date night" → matched rack appears, explain *why* each fits (color + shape).
-5. Tap top pick → VTO renders it on the shopper → "Add to bag."
-6. One line on the retail impact + the 3 YouCam APIs used.
+5. Tap a pick → VTO renders it on the shopper, right on the mirror ("no queue, no undressing"); try a second pick.
+6. Love one → "Get it": kiosk shows where it is on the floor + add to bag / my size.
+7. One line on the retail impact (fitting-room friction → conversion) + the YouCam APIs used.
