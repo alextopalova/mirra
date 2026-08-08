@@ -1,0 +1,18 @@
+.chips { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.chip { min-height: 56px; padding: 0 26px; border-radius: 999px; font-size: 20px;
+  background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text); }
+.chip.active { background: var(--accent-strong); border-color: transparent; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; width: min(94vw, 1080px); }
+.card { border-radius: var(--radius); overflow: hidden; background: var(--glass-bg);
+  border: 1px solid var(--glass-border); cursor: pointer; }
+.card img { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; }
+.card-body { padding: 16px; }
+.reason { font-size: 15px; color: var(--text-dim); }
+
+@media (max-width: 1100px) {
+  .grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .grid { grid-template-columns: 1fr; }
+}
