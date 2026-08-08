@@ -40,7 +40,9 @@
 
 ## 5. The hero: dual body classifier (custom, FastAPI backend)
 
-Runs server-side in the **FastAPI backend** (Python: MediaPipe + OpenCV + NumPy) — the CV domain where the tooling is strongest, most testable, and upgradeable to SAM/SHAPY later. The frontend just uploads the two photos + height/weight and renders the result.
+Runs server-side in the **FastAPI backend** (Python: MediaPipe + OpenCV + NumPy) — the CV domain where the tooling is strongest, most testable, and upgradeable to SAM/SHAPY later. The frontend just uploads the photo(s) + height/weight and renders the result.
+
+**Build priority: robust + demoable over state-of-the-art.** The MVP classifier works from the **front photo + height + weight** using MediaPipe Pose landmark ratios (reliable, fast). The **side photo is an optional enhancement** for torso-depth refinement — used if provided, skipped otherwise; the classifier never requires it. **No SAM/SHAPY in the MVP.** Accuracy good enough to be plausible and well-visualized beats measurement precision no one scrutinizes in a 3-minute demo.
 
 ```
 front photo ─┐
@@ -136,6 +138,9 @@ Final rank = weighted sum; top N shown; #1 offered for VTO try-on.
 
 ## 10. Scope
 
+**Build priorities (overriding):** a **good-looking, fully-functioning product beats feature depth**. Target a few focused days, not a full week. Order of investment: (1) polished liquid-glass kiosk UI + full click-through, (2) real YouCam try-on + color, (3) pragmatic body classifier, (4) recommendation, (5) deploy. Simplify or stub anything that threatens "looks great + works end-to-end."
+
+
 **MVP (the demo-able spine):**
 1. Kiosk-mode two-photo + height/weight capture.
 2. Custom dual body classifier (fruit + Japanese 3-type). ← hero
@@ -175,7 +180,16 @@ Final rank = weighted sum; top N shown; #1 offered for VTO try-on.
 - Demonstrably uses ≥2 (target 3) YouCam APIs meaningfully.
 - 1–3 min demo video shows the full walk-up→try-on loop on-device.
 
-## 13. Demo script (for the video)
+## 13. UI/UX direction (kiosk)
+
+- **Aesthetic:** grey/blue **liquid glass** — soft blue-grey gradient backdrop, frosted translucent panels (`backdrop-blur`), thin light borders, soft shadows. Primary theme **white-on-dark**; black-on-light as an alternate token set.
+- **Kiosk-native:** large surfaces, touch targets ≥72px, generous spacing and type; designed for standing viewing distance; **no physical-keyboard assumption**.
+- **On-screen input:** a numeric **keypad** pops up for height/weight; any free text uses an on-screen keyboard.
+- **Capture screen:** full-body **silhouette / pose-guide overlay** ("stand here"), distinct front vs. side guides, a countdown, tap-or-auto capture, retake option.
+- **Pacing:** minimal steps, fast transitions. The **results/classification screen is an intermediate stop** — big and instantly legible (large type, a body-type diagram, personal-color swatches) with **one dominant "Try it on" CTA**. Virtual try-on is the star; don't let the report detain the user.
+- **Accessibility:** high contrast, generous hit areas, motion kept subtle.
+
+## 14. Demo script (for the video)
 
 1. Walk up to the "mirror," tap Start.
 2. Snap front + side, enter height + weight. (Narrate: "no measuring tape, no quiz.")
