@@ -5,6 +5,8 @@ import { MeasurementsScreen } from "./screens/MeasurementsScreen";
 import { AnalyzingScreen } from "./screens/AnalyzingScreen";
 import { ReportScreen } from "./screens/ReportScreen";
 import { ShopScreen } from "./screens/ShopScreen";
+import { TryOnScreen } from "./screens/TryOnScreen";
+import { GetItScreen } from "./screens/GetItScreen";
 // Screen imports are added here as each screen is built (see Task 1.4+).
 
 export default function App() {
@@ -16,6 +18,8 @@ export default function App() {
     case "analyzing": return <AnalyzingScreen />;
     case "report": return <ReportScreen />;
     case "shop": return <ShopScreen />;
+    case "tryon": return <TryOnScreen />;
+    case "getit": return <GetItScreen />;
     default: return <div style={{ padding: 40 }}>TODO: {screen}</div>;
   }
 }

@@ -50,6 +50,8 @@ export function ShopScreen() {
     );
   }
 
+  if (loading) return <Spinner label="Finding your matches…" />;
+
   return (
     <div className="screen">
       <h2>Your matches</h2>
@@ -65,16 +67,12 @@ export function ShopScreen() {
             onClick={() => setOccasion(o)}>{o}</button>
         ))}
       </div>
-      {loading ? (
-        <Spinner label="Finding your matches…" />
-      ) : (
-        <div className="grid">
-          {recs.map((r) => (
-            <GarmentCard key={r.garment.id} rec={r}
-              onClick={() => { update({ selectedId: r.garment.id, category, occasion }); go("tryon"); }} />
-          ))}
-        </div>
-      )}
+      <div className="grid">
+        {recs.map((r) => (
+          <GarmentCard key={r.garment.id} rec={r}
+            onClick={() => { update({ selectedId: r.garment.id, category, occasion }); go("tryon"); }} />
+        ))}
+      </div>
     </div>
   );
 }
