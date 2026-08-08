@@ -38,9 +38,9 @@
 7. **Get it** — once they love one, the kiosk shows **where to find it on the floor** (in-store `location`/section) and offers **Add to bag / request my size / buy for delivery** (handoff, no real payment in MVP). Handles the "in a hurry / long queue / out of my size" cases.
 8. **Reset** — "Next customer" clears session.
 
-## 5. The hero: dual body classifier (custom, runs client-side)
+## 5. The hero: dual body classifier (custom, FastAPI backend)
 
-Runs entirely in-browser via MediaPipe WASM — no Python service.
+Runs server-side in the **FastAPI backend** (Python: MediaPipe + OpenCV + NumPy) — the CV domain where the tooling is strongest, most testable, and upgradeable to SAM/SHAPY later. The frontend just uploads the two photos + height/weight and renders the result.
 
 ```
 front photo ─┐
@@ -74,17 +74,21 @@ Output is a **weighted profile with confidence**, not a hard label — honest, d
 
 ## 6. Architecture
 
-**Stack:** Next.js (React, TypeScript) on Vercel → instant public URL for judges.
+**Two services.** React (Vite + TypeScript) frontend on Vercel/Netlify; **FastAPI (Python)** backend on Render/Railway/Fly/HF Spaces (or run locally for a single-machine kiosk demo). Both give judges a public URL.
 
-- **Client**
+- **Frontend (React kiosk UI)**
   - Camera capture (front + side) + height/weight form.
-  - MediaPipe Tasks Vision (WASM): pose + selfie segmentation → measurement extraction → dual classifier (pure TS ratio rules).
-  - Report UI, catalog browse, VTO viewer, kiosk chrome (fullscreen, large targets, reset).
-- **Server (Next.js API routes, Node)**
-  - Thin proxy for the 3 YouCam APIs. Holds the API key server-side. Implements their async upload → task → poll flow. Never exposes the key to the client.
+  - Sends photos + inputs to the backend; renders the style report, matched rack, VTO result.
+  - Kiosk chrome: fullscreen, large touch targets, walk-up start, "next customer" reset.
+  - No CV in the browser — the frontend stays thin.
+- **Backend (FastAPI)**
+  - **`/analyze-body`** — MediaPipe Pose + segmentation + OpenCV/NumPy → measurements → dual classifier (fruit + Japanese 3-type, weighted). The hero, and unit-testable against image fixtures.
+  - **`/recommend`** — runs the scorer pipeline over the catalog given the diagnosis + user selections.
+  - **YouCam proxy** — holds the API key server-side; implements the async upload → task → poll flow for Facial Color Tones, Apparel VTO, (optional) Face Attributes. Key never reaches the client.
+  - CORS configured for the frontend origin.
 - **Data**
-  - `catalog.json` — ~40 curated garments with clean flat-lay images.
-  - Recommendation engine — a **pluggable scorer pipeline**.
+  - `catalog.json` — ~40 curated garments with clean flat-lay images (+ `location`, `sizes_in_stock`).
+  - Recommendation engine — a **pluggable scorer pipeline** (Python).
 
 ## 7. Recommendation engine (extensible by design)
 
@@ -162,6 +166,7 @@ Final rank = weighted sum; top N shown; #1 offered for VTO try-on.
 | YouCam async/latency stalls the demo | Show progress states; pre-warm; cache per session; have a recorded fallback in the video. |
 | Free API-unit budget exhaustion | Cache per session; mock responses in dev; only call live during real runs. |
 | VTO quality on messy garment images | Curated flat-lay catalog only (a benefit of kiosk framing). |
+| Two-service deploy: CORS / backend cold-start on free tiers | Configure CORS early; keep a container image; for the demo run the FastAPI backend locally alongside the kiosk, or pre-warm the host before recording. |
 | Scope creep | MVP spine is fixed; everything else is an add-on behind clean seams. |
 
 ## 12. Success criteria
