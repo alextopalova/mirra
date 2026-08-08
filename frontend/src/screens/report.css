@@ -1,0 +1,7 @@
+.report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; width: min(92vw, 960px); }
+.report-cta { margin-top: 36px; }
+.report-swatches { margin-top: 16px; }
+
+@media (max-width: 720px) {
+  .report-grid { grid-template-columns: 1fr; }
+}
