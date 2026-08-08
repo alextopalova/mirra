@@ -6,7 +6,7 @@
   width: 84px;
   height: 84px;
   border-radius: 50%;
-  border: 6px solid rgba(255, 255, 255, 0.15);
+  border: 6px solid var(--glass-border);
   border-top-color: var(--accent);
   animation: spin 0.9s linear infinite;
 }

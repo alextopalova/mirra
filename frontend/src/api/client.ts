@@ -12,6 +12,7 @@ export async function analyzeBody(input: {
   const r = await fetch(`${BASE}/analyze-body`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
   });
+  if (!r.ok) throw new Error(`analyze-body failed: ${r.status}`);
   return r.json();
 }
 
@@ -22,6 +23,7 @@ export async function recommend(input: {
   const r = await fetch(`${BASE}/recommend`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
   });
+  if (!r.ok) throw new Error(`recommend failed: ${r.status}`);
   return r.json();
 }
 
@@ -30,5 +32,6 @@ export async function tryOn(input: { personPhoto: string; garmentId: string }): 
   const r = await fetch(`${BASE}/try-on`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
   });
+  if (!r.ok) throw new Error(`try-on failed: ${r.status}`);
   return r.json();
 }

@@ -8,14 +8,14 @@ export const mockProfile: BodyProfile = {
 export const mockPalette: Palette = {
   season: "Autumn", colors: ["#8C5A3C", "#C08457", "#6B7F5B", "#B0463C", "#D9A05B"],
 };
-const g = (id: string, name: string, cat: string, color: string): Garment => ({
+const g = (id: string, name: string, cat: string): Garment => ({
   id, name, category: cat, image_url: `https://picsum.photos/seed/${id}/400/560`,
   price: 1280, location: "Women's · Aisle 3", sizes_in_stock: ["S", "M", "L"], buy_url: "#",
 });
 export const mockRecs: Recommendation[] = [
-  { garment: g("d1", "Wrap midi dress", "dress", "#8C5A3C"), score: 0.92,
+  { garment: g("d1", "Wrap midi dress", "dress"), score: 0.92,
     reasons: ["Autumn palette match", "Defines the waist (Wave)"] },
-  { garment: g("d2", "Fit-and-flare dress", "dress", "#C08457"), score: 0.88,
+  { garment: g("d2", "Fit-and-flare dress", "dress"), score: 0.88,
     reasons: ["Warm tone", "High-waist silhouette"] },
 ];
 export const mockTryOn = { image: "https://picsum.photos/seed/tryon/600/840" };
