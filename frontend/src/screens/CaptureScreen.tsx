@@ -11,6 +11,16 @@ export function CaptureScreen() {
   const [step, setStep] = useState<"front" | "side">("front");
   const [count, setCount] = useState<number | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,18 +47,28 @@ export function CaptureScreen() {
   };
 
   const runCountdown = (after: () => void) => {
+    if (timerRef.current !== null) return;
     let n = 3; setCount(n);
-    const id = setInterval(() => {
+    const id = window.setInterval(() => {
       n -= 1;
-      if (n === 0) { clearInterval(id); setCount(null); after(); } else setCount(n);
+      if (n === 0) {
+        window.clearInterval(id);
+        timerRef.current = null;
+        setCount(null);
+        after();
+      } else setCount(n);
     }, 700);
+    timerRef.current = id;
   };
 
-  const capture = () => runCountdown(() => {
-    const img = snap();
-    if (step === "front") { update({ frontPhoto: img }); setStep("side"); }
-    else { update({ sidePhoto: img }); go("measurements"); }
-  });
+  const capture = () => {
+    if (timerRef.current !== null) return;
+    runCountdown(() => {
+      const img = snap();
+      if (step === "front") { update({ frontPhoto: img }); setStep("side"); }
+      else { update({ sidePhoto: img }); go("measurements"); }
+    });
+  };
 
   return (
     <div className="screen">
@@ -59,12 +79,12 @@ export function CaptureScreen() {
         {count !== null && <div className="capture-countdown">{count}</div>}
       </div>
       {cameraError ? (
-        <p className="capture-hint" style={{ color: "#FF6B6B" }}>{cameraError}</p>
+        <p className="capture-hint capture-error">{cameraError}</p>
       ) : (
         <p className="capture-hint">Stand so your whole body fits the outline.</p>
       )}
       <div style={{ display: "flex", gap: 16 }}>
-        <PrimaryButton label={step === "front" ? "Capture front" : "Capture side"} onClick={capture} disabled={!!cameraError} />
+        <PrimaryButton label={step === "front" ? "Capture front" : "Capture side"} onClick={capture} disabled={!!cameraError || count !== null} />
         {step === "side" && (
           <PrimaryButton label="Skip side" variant="ghost" onClick={() => go("measurements")} />
         )}
