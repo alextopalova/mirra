@@ -40,7 +40,11 @@ export function TryOnScreen() {
     );
   }
 
-  if (!img) return <Spinner label="Dressing you…" />;
+  if (!img) return (
+    <div className="screen">
+      <Spinner label="Dressing you…" />
+    </div>
+  );
 
   return (
     <div className="screen">

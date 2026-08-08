@@ -3,6 +3,7 @@ import { useSession } from "../state/session";
 import { analyzeBody } from "../api/client";
 import { Spinner } from "../components/Spinner";
 import { ErrorState } from "../components/ErrorState";
+import "./screen.css";
 
 export function AnalyzingScreen() {
   const { data, update, go, reset } = useSession();
@@ -36,5 +37,9 @@ export function AnalyzingScreen() {
     );
   }
 
-  return <Spinner label="Reading your colors and frame…" />;
+  return (
+    <div className="screen">
+      <Spinner label="Reading your colors and frame…" />
+    </div>
+  );
 }
