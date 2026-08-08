@@ -1,0 +1,4 @@
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; width: 320px; }
+.keypad button { min-height: var(--touch); font-size: 30px; border-radius: 20px;
+  background: var(--glass-bg-strong); border: 1px solid var(--glass-border); color: var(--text); }
+.keypad button:active { transform: scale(0.96); }
