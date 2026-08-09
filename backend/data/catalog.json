@@ -1,0 +1,500 @@
+[
+  {
+    "id": "d1",
+    "name": "Wrap midi dress",
+    "category": "dress",
+    "image_url": "https://picsum.photos/seed/d1/400/560",
+    "price": 1280,
+    "color_hex": "#8C5A3C",
+    "season_tags": [
+      "autumn"
+    ],
+    "silhouette": {
+      "waist": "defined",
+      "fabric": "soft",
+      "structured": false,
+      "neckline": "v"
+    },
+    "occasion_tags": [
+      "date night",
+      "everyday"
+    ],
+    "location": "Women's \u00b7 Aisle 3 \u00b7 Dresses",
+    "sizes_in_stock": [
+      "S",
+      "M",
+      "L"
+    ],
+    "buy_url": "#",
+    "color_lab": [
+      43.08,
+      17.24,
+      25.68
+    ]
+  },
+  {
+    "id": "d2",
+    "name": "Tailored shift dress",
+    "category": "dress",
+    "image_url": "https://picsum.photos/seed/d2/400/560",
+    "price": 1590,
+    "color_hex": "#1C2541",
+    "season_tags": [
+      "winter"
+    ],
+    "silhouette": {
+      "waist": "regular",
+      "fabric": "crisp",
+      "structured": true,
+      "neckline": "round"
+    },
+    "occasion_tags": [
+      "work",
+      "everyday"
+    ],
+    "location": "Women's \u00b7 Aisle 3 \u00b7 Dresses",
+    "sizes_in_stock": [
+      "XS",
+      "S",
+      "M",
+      "L"
+    ],
+    "buy_url": "#",
+    "color_lab": [
+      15.23,
+      5.56,
+      -19.03
+    ]
+  },
+  {
+    "id": "d3",
+    "name": "Floral sundress",
+    "category": "dress",
+    "image_url": "https://picsum.photos/seed/d3/400/560",
+    "price": 940,
+    "color_hex": "#F4C2C2",
+    "season_tags": [
+      "summer"
+    ],
+    "silhouette": {
+      "waist": "regular",
+      "fabric": "light",
+      "structured": false,
+      "neckline": "square"
+    },
+    "occasion_tags": [
+      "everyday",
+      "date night"
+    ],
+    "location": "Women's \u00b7 Aisle 4 \u00b7 Dresses",
+    "sizes_in_stock": [
+      "XS",
+      "S",
+      "M"
+    ],
+    "buy_url": "#",
+    "color_lab": [
+      82.76,
+      17.83,
+      6.81
+    ]
+  },
+  {
+    "id": "d4",
+    "name": "Satin slip dress",
+    "category": "dress",
+    "image_url": "https://picsum.photos/seed/d4/400/560",
+    "price": 2150,
+    "color_hex": "#722F37",
+    "season_tags": [
+      "winter"
+    ],
+    "silhouette": {
+      "waist": "defined",
+      "fabric": "smooth",
+      "structured": false,
+      "neckline": "v"
+    },
+    "occasion_tags": [
+      "wedding guest",
+      "date night"
+    ],
+    "location": "Women's \u00b7 Aisle 3 \u00b7 Occasion",
+    "sizes_in_stock": [
+      "S",
+      "M",
+      "L",
+      "XL"
+    ],
+    "buy_url": "#",
+    "color_lab": [
+      29.12,
+      30.37,
+      9.72
+    ]
+  },
+  {
+    "id": "d5",
+    "name": "Linen shirt dress",
+    "category": "dress",
+    "image_url": "https://picsum.photos/seed/d5/400/560",
+    "price": 1350,
+    "color_hex": "#D9CBA3",
+    "season_tags": [
+      "spring"
+    ],
+    "silhouette": {
+      "waist": "relaxed",
+      "fabric": "natural",
+      "structured": false,
+      "neckline": "high"
+    },
+    "occasion_tags": [
+      "everyday",
+      "work"
+    ],
+    "location": "Women's \u00b7 Aisle 4 \u00b7 Dresses",
+    "sizes_in_stock": [
+      "S",
+      "M",
+      "L"
+    ],
+    "buy_url": "#",
+    "color_lab": [
+      81.9,
+      -1.36,
+      21.75
+    ]
+  },
+  {
+    "id": "t1",
+    "name": "Silk button-front blouse",
+    "category": "top",
+    "image_url": "https://picsum.photos/seed/t1/400/560",
+    "price": 890,
+    "color_hex": "#F5F0E6",
+    "season_tags": [
+      "summer"
+    ],
+    "silhouette": {
+      "waist": "regular",
+      "fabric": "smooth",
+      "structured": false,
+      "neckline": "v"
+    },
+    "occasion_tags": [
+      "work",
+      "everyday"
+    ],
+    "location": "Women's \u00b7 Aisle 2 \u00b7 Tops",
+    "sizes_in_stock": [
+      "XS",
+      "S",
+      "M",
+      "L"
+    ],
+    "buy_url": "#",
+    "color_lab": [
+      94.93,
+      -0.03,
+      5.41
+    ]
+  },
+  {
+    "id": "t2",
+    "name": "Chunky cable-knit sweater",
+    "category": "top",
+    "image_url": "https://picsum.photos/seed/t2/400/560",
+    "price": 1120,
+    "color_hex": "#6B4226",
+    "season_tags": [
+      "autumn"
+    ],
+    "silhouette": {
+      "waist": "relaxed",
+      "fabric": "chunky",
+      "structured": false,
+      "neckline": "round"
+    },
+    "occasion_tags": [
+      "everyday"
+    ],
+    "location": "Women's \u00b7 Aisle 2 \u00b7 Knitwear",
+    "sizes_in_stock": [
+      "S",
+      "M",
+      "L",
+      "XL"
+    ],
+    "buy_url": "#",
+    "color_lab": [
+      32.17,
+      14.73,
+      24.2
+    ]
+  },
+  {
+    "id": "t3",
+    "name": "Structured tailored blouse",
+    "category": "top",
+    "image_url": "https://picsum.photos/seed/t3/400/560",
+    "price": 980,
+    "color_hex": "#14213D",
+    "season_tags": [
+      "winter"
+    ],
+    "silhouette": {
+      "waist": "defined",
+      "fabric": "crisp",
+      "structured": true,
+      "neckline": "round"
+    },
+    "occasion_tags": [
+      "work"
+    ],
+    "location": "Women's \u00b7 Aisle 2 \u00b7 Tops",
+    "sizes_in_stock": [
+      "XS",
+      "S",
+      "M"
+    ],
+    "buy_url": "#",
+    "color_lab": [
+      13.07,
+      4.82,
+      -19.69
+    ]
+  },
+  {
+    "id": "t4",
+    "name": "Draped cowl-neck top",
+    "category": "top",
+    "image_url": "https://picsum.photos/seed/t4/400/560",
+    "price": 760,
+    "color_hex": "#B0A8B9",
+    "season_tags": [
+      "summer"
+    ],
+    "silhouette": {
+      "waist": "regular",
+      "fabric": "draping",
+      "structured": false,
+      "neckline": "v"
+    },
+    "occasion_tags": [
+      "date night",
+      "everyday"
+    ],
+    "location": "Women's \u00b7 Aisle 2 \u00b7 Tops",
+    "sizes_in_stock": [
+      "S",
+      "M",
+      "L"
+    ],
+    "buy_url": "#",
+    "color_lab": [
+      69.99,
+      6.1,
+      -7.69
+    ]
+  },
+  {
+    "id": "t5",
+    "name": "Oversized graphic tee",
+    "category": "top",
+    "image_url": "https://picsum.photos/seed/t5/400/560",
+    "price": 520,
+    "color_hex": "#FF6F61",
+    "season_tags": [
+      "spring"
+    ],
+    "silhouette": {
+      "waist": "relaxed",
+      "fabric": "textured",
+      "structured": false,
+      "neckline": "round"
+    },
+    "occasion_tags": [
+      "everyday"
+    ],
+    "location": "Women's \u00b7 Aisle 1 \u00b7 Tops",
+    "sizes_in_stock": [
+      "S",
+      "M",
+      "L",
+      "XL"
+    ],
+    "buy_url": "#",
+    "color_lab": [
+      64.56,
+      53.91,
+      35.17
+    ]
+  },
+  {
+    "id": "p1",
+    "name": "Tailored charcoal trousers",
+    "category": "pants",
+    "image_url": "https://picsum.photos/seed/p1/400/560",
+    "price": 1480,
+    "color_hex": "#2B2B2B",
+    "season_tags": [
+      "winter"
+    ],
+    "silhouette": {
+      "waist": "defined",
+      "fabric": "structured",
+      "structured": true,
+      "neckline": "n/a"
+    },
+    "occasion_tags": [
+      "work"
+    ],
+    "location": "Women's \u00b7 Aisle 5 \u00b7 Pants",
+    "sizes_in_stock": [
+      "XS",
+      "S",
+      "M",
+      "L"
+    ],
+    "buy_url": "#",
+    "color_lab": [
+      17.53,
+      0.0,
+      -0.0
+    ]
+  },
+  {
+    "id": "p2",
+    "name": "Wide-leg linen pants",
+    "category": "pants",
+    "image_url": "https://picsum.photos/seed/p2/400/560",
+    "price": 1150,
+    "color_hex": "#E3D5B8",
+    "season_tags": [
+      "spring"
+    ],
+    "silhouette": {
+      "waist": "relaxed",
+      "fabric": "light",
+      "structured": false,
+      "neckline": "n/a"
+    },
+    "occasion_tags": [
+      "everyday"
+    ],
+    "location": "Women's \u00b7 Aisle 5 \u00b7 Pants",
+    "sizes_in_stock": [
+      "S",
+      "M",
+      "L"
+    ],
+    "buy_url": "#",
+    "color_lab": [
+      85.7,
+      0.19,
+      16.08
+    ]
+  },
+  {
+    "id": "p3",
+    "name": "High-waist skinny jeans",
+    "category": "pants",
+    "image_url": "https://picsum.photos/seed/p3/400/560",
+    "price": 990,
+    "color_hex": "#3B4252",
+    "season_tags": [
+      "winter"
+    ],
+    "silhouette": {
+      "waist": "high",
+      "fabric": "structured",
+      "structured": true,
+      "neckline": "n/a"
+    },
+    "occasion_tags": [
+      "everyday",
+      "date night"
+    ],
+    "location": "Women's \u00b7 Aisle 5 \u00b7 Denim",
+    "sizes_in_stock": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL"
+    ],
+    "buy_url": "#",
+    "color_lab": [
+      27.94,
+      1.32,
+      -10.56
+    ]
+  },
+  {
+    "id": "p4",
+    "name": "Soft jogger pants",
+    "category": "pants",
+    "image_url": "https://picsum.photos/seed/p4/400/560",
+    "price": 680,
+    "color_hex": "#8A8578",
+    "season_tags": [
+      "autumn"
+    ],
+    "silhouette": {
+      "waist": "relaxed",
+      "fabric": "soft",
+      "structured": false,
+      "neckline": "n/a"
+    },
+    "occasion_tags": [
+      "everyday"
+    ],
+    "location": "Women's \u00b7 Aisle 1 \u00b7 Pants",
+    "sizes_in_stock": [
+      "S",
+      "M",
+      "L",
+      "XL"
+    ],
+    "buy_url": "#",
+    "color_lab": [
+      55.62,
+      -0.51,
+      7.67
+    ]
+  },
+  {
+    "id": "p5",
+    "name": "Pleated palazzo pants",
+    "category": "pants",
+    "image_url": "https://picsum.photos/seed/p5/400/560",
+    "price": 1320,
+    "color_hex": "#C08497",
+    "season_tags": [
+      "summer"
+    ],
+    "silhouette": {
+      "waist": "high",
+      "fabric": "draping",
+      "structured": false,
+      "neckline": "n/a"
+    },
+    "occasion_tags": [
+      "wedding guest",
+      "date night"
+    ],
+    "location": "Women's \u00b7 Aisle 5 \u00b7 Pants",
+    "sizes_in_stock": [
+      "S",
+      "M",
+      "L"
+    ],
+    "buy_url": "#",
+    "color_lab": [
+      61.61,
+      25.83,
+      -0.79
+    ]
+  }
+]
