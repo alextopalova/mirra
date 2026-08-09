@@ -60,6 +60,21 @@ async def test_poll_sends_authorization_header_and_hits_expected_path():
 
 
 @pytest.mark.asyncio
+async def test_poll_handles_response_without_data_wrapper():
+    """Contract says fields nest under 'data', but the client must tolerate
+    a top-level payload too, per requirement #3 (defensive parsing)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": "done", "results": {"url": "https://x"}})
+
+    client = YouCamClient(transport=httpx.MockTransport(handler))
+    result = await client.poll("cloth", "task123", interval=0)
+
+    assert result["status"] == "done"
+    assert result["results"]["url"] == "https://x"
+
+
+@pytest.mark.asyncio
 async def test_poll_raises_with_api_error_message_on_error_status():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
