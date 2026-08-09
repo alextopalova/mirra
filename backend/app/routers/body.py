@@ -1,7 +1,18 @@
 """POST /analyze-body: photos + height/weight -> body profile + palette.
 
-The palette is a PLACEHOLDER until the real YouCam Facial Color Tones
-integration lands in Phase 4.
+The palette comes from the real YouCam Facial Color Tones integration
+(`app.youcam.color.analyze_color`) in real mode, and a fixed placeholder in
+mock mode (`settings.use_mocks`, see app/config.py) -- mock mode never
+touches the network, to protect the YouCam credit budget during
+development (see app/youcam/CONTRACT.md).
+
+`analyze_color` is designed to never raise -- every colour-analysis
+failure mode (no face to crop, a YouCam task/timeout/auth error, an
+unrecognised result payload) is caught internally and degrades to a
+default palette. The `try/except Exception` around its call below is a
+deliberate extra safety net on top of that, not the primary mechanism: a
+failed colour read must never turn the shopper's otherwise-successful
+body scan into a 500.
 
 Error mapping (why 422, not 500): `measure_from_images` raises `ValueError`
 for problems the *shopper* can fix by retaking a photo (no person detected,
@@ -31,8 +42,10 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.config import settings
 from app.cv.classify import classify
 from app.cv.measure import measure_from_images
+from app.youcam.color import analyze_color
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +59,8 @@ class AnalyzeIn(BaseModel):
     weightKg: float
 
 
-# Placeholder palette until YouCam Facial Color Tones is wired (Phase 4).
+# Palette used in mock mode, and as the final fallback if real-mode colour
+# analysis fails for any reason (see analyze_body below).
 _PLACEHOLDER_PALETTE = {
     "season": "Autumn",
     "colors": ["#8C5A3C", "#C08457", "#6B7F5B", "#B0463C", "#D9A05B"],
@@ -90,7 +104,7 @@ def _decode(dataurl: str, field: str):
 
 
 @router.post("/analyze-body")
-def analyze_body(inp: AnalyzeIn):
+async def analyze_body(inp: AnalyzeIn):
     front = _decode(inp.frontPhoto, "frontPhoto")
 
     side = None
@@ -115,4 +129,17 @@ def analyze_body(inp: AnalyzeIn):
         raise HTTPException(status_code=422, detail=str(e))
 
     profile = classify(m)
-    return {"profile": profile.model_dump(), "palette": _PLACEHOLDER_PALETTE}
+
+    if settings.use_mocks:
+        palette = _PLACEHOLDER_PALETTE
+    else:
+        try:
+            palette = await analyze_color(front)
+        except Exception:
+            # Belt-and-suspenders: analyze_color already catches its own
+            # failure modes (see its docstring), but a colour-analysis bug
+            # must still never break an otherwise-successful body scan.
+            logger.warning("Unexpected error during colour analysis; using placeholder palette.", exc_info=True)
+            palette = _PLACEHOLDER_PALETTE
+
+    return {"profile": profile.model_dump(), "palette": palette}
