@@ -10,9 +10,30 @@ from fastapi.testclient import TestClient
 
 from app.config import settings
 from app.main import app
+from app.reco.catalog import Garment
 from app.youcam.client import YouCamClient
 
 client = TestClient(app)
+
+
+def _fake_garment(**overrides) -> Garment:
+    fields = {
+        "id": "fake-1",
+        "name": "Fake Garment",
+        "category": "top",
+        "image_url": "/garments/fake-1.jpg",
+        "price": 100.0,
+        "location": "Test · Aisle 1",
+        "sizes_in_stock": ["S", "M"],
+        "buy_url": "#",
+        "color_hex": "#000000",
+        "color_lab": [0.0, 0.0, 0.0],
+        "season_tags": ["all"],
+        "silhouette": {},
+        "occasion_tags": ["everyday"],
+    }
+    fields.update(overrides)
+    return Garment(**fields)
 
 PERSON_DATAURL = "data:image/jpeg;base64,ZmFrZS1wZXJzb24tcGhvdG8tYnl0ZXM="
 
@@ -290,6 +311,44 @@ def test_try_on_timeout_maps_to_503_with_shopper_message(monkeypatch):
 # ---------------------------------------------------------------------------
 # Real mode — malformed photo
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Real mode — self-hosted garment image, missing file
+# ---------------------------------------------------------------------------
+
+def test_try_on_missing_garment_file_maps_to_503_with_shopper_message(monkeypatch, tmp_path):
+    # End-to-end: a catalog entry pointing at a relative "/garments/..."
+    # path whose file doesn't exist on disk must degrade to the same
+    # shopper-facing 503 as any other YouCam failure -- never a raw
+    # 500/stack trace, and never leaking the server's local file path.
+    monkeypatch.setattr(settings, "use_mocks", False)
+    monkeypatch.setattr("app.youcam.vto._GARMENTS_DIR", tmp_path.resolve())
+    monkeypatch.setattr(
+        "app.routers.youcam.load_catalog",
+        lambda: [_fake_garment(image_url="/garments/does-not-exist.jpg")],
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and request.url.path == "/s2s/v2.0/file/cloth":
+            return httpx.Response(
+                200,
+                json={"data": {"files": [{"file_id": "f1", "requests": [{"method": "PUT", "url": "https://s3.example.com/put", "headers": {}}]}]}},
+            )
+        if request.method == "PUT":
+            return httpx.Response(200)
+        raise AssertionError(f"must not reach the task/run step: {request.method} {request.url}")
+
+    monkeypatch.setattr("app.youcam.vto.YouCamClient", _mock_transport_client_factory(handler))
+
+    r = client.post("/try-on", json={"personPhoto": PERSON_DATAURL, "garmentId": "fake-1"})
+
+    assert r.status_code == 503
+    body = r.text
+    detail = r.json()["detail"]
+    assert "try another item" in detail.lower() or "try again" in detail.lower()
+    assert str(tmp_path) not in body
+    assert "does-not-exist.jpg" not in body
+
 
 def test_try_on_malformed_person_photo_returns_422(monkeypatch):
     monkeypatch.setattr(settings, "use_mocks", False)

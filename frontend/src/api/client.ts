@@ -68,6 +68,19 @@ export async function recommend(input: {
   return r.json();
 }
 
+/** Resolve a garment `image_url` against the API origin.
+ *
+ * Catalog entries store `image_url` as either a relative path served by
+ * the backend's static mount (e.g. "/garments/d1.jpg" -- see
+ * backend/app/main.py) or, for any not-yet-migrated entry, a
+ * fully-qualified http(s) URL to a third party. Every screen that renders
+ * a garment image should route through this single helper rather than
+ * using `image_url` directly, so the resolution rule lives in one place. */
+export function resolveImageUrl(imageUrl: string): string {
+  if (/^https?:\/\//i.test(imageUrl)) return imageUrl;
+  return `${BASE}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
+}
+
 export async function tryOn(input: { personPhoto: string; garmentId: string }): Promise<{ image: string }> {
   if (USE_MOCKS) { await wait(1800); return M.mockTryOn; }
   const r = await fetch(`${BASE}/try-on`, {
