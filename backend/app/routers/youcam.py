@@ -20,10 +20,19 @@ server-side, never echoed to the client, so nothing about the API key or
 YouCam's raw error text can leak into the response. Malformed
 `personPhoto` data maps to 422, matching the convention set by
 app/routers/body.py's `_decode`.
+
+client.py's upload()/run()/poll() call resp.raise_for_status() without
+wrapping, so a non-2xx from YouCam (expired key, rate limit, malformed
+request, transient network blip) surfaces as a raw httpx.HTTPError
+(HTTPStatusError for bad status codes, or a transport-level error),
+which is not a YouCamError. Those are caught here too and mapped to the
+same shopper-friendly 503 -- never a raw 500 -- with the exception
+logged server-side only.
 """
 
 import logging
 
+import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -48,6 +57,11 @@ class TryOnIn(BaseModel):
 @router.post("/try-on")
 async def try_on_route(inp: TryOnIn):
     garment = next((g for g in load_catalog() if g.id == inp.garmentId), None)
+
+    if garment is None and not settings.use_mocks:
+        # Distinguishes a stale/mistyped frontend garmentId from mock mode
+        # in the logs -- the shopper still gets the placeholder either way.
+        logger.warning("try-on requested with unknown garmentId %r; returning placeholder", inp.garmentId)
 
     if settings.use_mocks or garment is None:
         return {"image": PLACEHOLDER_IMAGE}
@@ -75,4 +89,17 @@ async def try_on_route(inp: TryOnIn):
         raise HTTPException(
             status_code=503,
             detail="The virtual try-on is temporarily unavailable — please try again.",
+        )
+    except httpx.HTTPError:
+        # Covers both HTTPStatusError (non-2xx from YouCam -- expired key,
+        # rate limit, malformed request) and transport/network-level
+        # failures. client.py's raise_for_status() calls are unwrapped, so
+        # these reach us as plain httpx errors, not YouCamError subclasses.
+        # Same shopper-friendly 503 as the other failure modes; the
+        # exception (which could reference the request URL) is only
+        # logged, never echoed to the client.
+        logger.exception("YouCam HTTP error during try-on for garment %s", inp.garmentId)
+        raise HTTPException(
+            status_code=503,
+            detail="The virtual try-on couldn't be generated — please try another item.",
         )

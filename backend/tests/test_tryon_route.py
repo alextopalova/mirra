@@ -63,6 +63,45 @@ def test_try_on_unknown_garment_id_returns_placeholder_without_network(monkeypat
     assert r.json()["image"].startswith("http")
 
 
+def test_try_on_unknown_garment_id_logs_warning_naming_the_id(monkeypatch, caplog):
+    # A stale/mistyped frontend garmentId should be distinguishable from
+    # mock mode in the logs, even though the shopper-facing behaviour
+    # (placeholder) is unchanged.
+    monkeypatch.setattr(settings, "use_mocks", False)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("unknown garmentId must not touch the network")
+
+    monkeypatch.setattr("app.youcam.vto.YouCamClient", _mock_transport_client_factory(handler))
+
+    with caplog.at_level("WARNING", logger="app.routers.youcam"):
+        r = client.post("/try-on", json={"personPhoto": PERSON_DATAURL, "garmentId": "does-not-exist"})
+
+    assert r.status_code == 200
+    assert any(
+        record.levelname == "WARNING" and "does-not-exist" in record.getMessage()
+        for record in caplog.records
+    )
+
+
+def test_try_on_unknown_garment_id_in_mock_mode_does_not_warn(monkeypatch, caplog):
+    # In mock mode every garmentId is ignored anyway -- there's nothing
+    # anomalous to warn about, so it shouldn't be conflated with a real
+    # unknown-id situation.
+    monkeypatch.setattr(settings, "use_mocks", True)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("mock mode must not touch the network")
+
+    monkeypatch.setattr("app.youcam.vto.YouCamClient", _mock_transport_client_factory(handler))
+
+    with caplog.at_level("WARNING", logger="app.routers.youcam"):
+        r = client.post("/try-on", json={"personPhoto": PERSON_DATAURL, "garmentId": "does-not-exist"})
+
+    assert r.status_code == 200
+    assert not any(record.levelname == "WARNING" for record in caplog.records)
+
+
 # ---------------------------------------------------------------------------
 # Real mode — happy paths
 # ---------------------------------------------------------------------------
@@ -149,6 +188,67 @@ def test_try_on_task_failure_maps_to_503_with_shopper_message(monkeypatch):
     # Never leak the raw API error / API key into the shopper-facing response.
     assert "SECRET-DEBUG-INFO" not in detail
     assert "sk-" not in detail
+
+
+@pytest.mark.parametrize("status_code", [401, 429])
+def test_try_on_upload_http_error_maps_to_503_with_shopper_message(monkeypatch, status_code):
+    # Non-2xx from the upload step's "create entry" call (e.g. expired key,
+    # rate limiting) is an unwrapped httpx.HTTPStatusError from client.py's
+    # raise_for_status() -- must not fall through to a raw 500.
+    monkeypatch.setattr(settings, "use_mocks", False)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and request.url.path == "/s2s/v2.0/file/cloth":
+            return httpx.Response(
+                status_code,
+                json={"error": "SECRET-DEBUG-INFO sk-should-not-leak", "message": "nope"},
+            )
+        raise AssertionError(f"unexpected request after upload failure: {request.method} {request.url}")
+
+    monkeypatch.setattr("app.youcam.vto.YouCamClient", _mock_transport_client_factory(handler))
+
+    r = client.post("/try-on", json={"personPhoto": PERSON_DATAURL, "garmentId": "d1"})
+
+    assert r.status_code == 503
+    body = r.text
+    detail = r.json()["detail"]
+    assert "try another item" in detail.lower() or "try again" in detail.lower()
+    # Never leak the raw API error / API key / URL into the shopper-facing response.
+    assert "SECRET-DEBUG-INFO" not in body
+    assert "sk-" not in body
+
+
+@pytest.mark.parametrize("status_code", [401, 429])
+def test_try_on_run_http_error_maps_to_503_with_shopper_message(monkeypatch, status_code):
+    # Non-2xx from the run ("start task") step -- must also map to 503,
+    # not a raw 500.
+    monkeypatch.setattr(settings, "use_mocks", False)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and request.url.path == "/s2s/v2.0/file/cloth":
+            return httpx.Response(
+                200,
+                json={"data": {"files": [{"file_id": "f1", "requests": [{"method": "PUT", "url": "https://s3.example.com/put", "headers": {}}]}]}},
+            )
+        if request.method == "PUT":
+            return httpx.Response(200)
+        if request.method == "POST" and request.url.path == "/s2s/v2.0/task/cloth":
+            return httpx.Response(
+                status_code,
+                json={"error": "SECRET-DEBUG-INFO sk-should-not-leak", "message": "nope"},
+            )
+        raise AssertionError(f"unexpected request after run failure: {request.method} {request.url}")
+
+    monkeypatch.setattr("app.youcam.vto.YouCamClient", _mock_transport_client_factory(handler))
+
+    r = client.post("/try-on", json={"personPhoto": PERSON_DATAURL, "garmentId": "d1"})
+
+    assert r.status_code == 503
+    body = r.text
+    detail = r.json()["detail"]
+    assert "try another item" in detail.lower() or "try again" in detail.lower()
+    assert "SECRET-DEBUG-INFO" not in body
+    assert "sk-" not in body
 
 
 def test_try_on_timeout_maps_to_503_with_shopper_message(monkeypatch):

@@ -9,7 +9,7 @@ import pytest
 
 from app.config import settings
 from app.youcam.client import YouCamClient, YouCamResponseError, YouCamTaskError
-from app.youcam.vto import garment_category_for, try_on
+from app.youcam.vto import _POLL_INTERVAL_SECONDS, _POLL_MAX_TRIES, garment_category_for, try_on
 
 
 @pytest.fixture(autouse=True)
@@ -186,6 +186,42 @@ async def test_try_on_closes_client_even_when_task_fails(monkeypatch):
         await try_on(b"person-bytes", "https://garment.example.com/g.jpg", "upper_body")
 
     assert captured["client"]._client.is_closed
+
+
+# ---------------------------------------------------------------------------
+# poll() call site — tightened timeout for the kiosk (Finding 2)
+# ---------------------------------------------------------------------------
+
+def test_try_on_tightens_poll_timeout_below_client_defaults():
+    # Sanity check on the constants themselves: well under client.py's
+    # shared defaults (60 tries x 2.5s ~= 150s), landing in a ~60-75s
+    # ceiling appropriate for an unattended kiosk.
+    assert _POLL_INTERVAL_SECONDS * _POLL_MAX_TRIES <= 75
+    assert _POLL_MAX_TRIES < 60
+
+
+@pytest.mark.asyncio
+async def test_try_on_passes_tightened_poll_args_to_client(monkeypatch):
+    seen: dict = {}
+    handler = _happy_path_handler({"results": {"url": "https://result.example.com/img.jpg"}}, {})
+    monkeypatch.setattr(
+        "app.youcam.vto.YouCamClient",
+        lambda: YouCamClient(transport=httpx.MockTransport(handler)),
+    )
+
+    _original_poll = YouCamClient.poll
+
+    async def _spy_poll(self, task, task_id, interval=2.5, max_tries=60):
+        seen["interval"] = interval
+        seen["max_tries"] = max_tries
+        return await _original_poll(self, task, task_id, interval=0, max_tries=max_tries)
+
+    monkeypatch.setattr(YouCamClient, "poll", _spy_poll)
+
+    await try_on(b"person-bytes", "https://garment.example.com/g.jpg", "upper_body")
+
+    assert seen["interval"] == _POLL_INTERVAL_SECONDS
+    assert seen["max_tries"] == _POLL_MAX_TRIES
 
 
 # ---------------------------------------------------------------------------

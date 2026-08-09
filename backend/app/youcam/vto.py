@@ -37,6 +37,17 @@ CATEGORY_MAP = {
 # the shopper's try-on.
 _DEFAULT_GARMENT_CATEGORY = "full_body"
 
+# client.py's poll() defaults (60 tries x 2.5s ~= 150s) are shared across
+# every YouCam task and are too loose for an unattended kiosk: CONTRACT.md
+# says `cloth` generation takes "tens of seconds", so a shopper standing at
+# the mirror shouldn't watch a spinner for 2.5 minutes before finding out
+# it failed. Tighten just this call site to roughly a 60-75s ceiling --
+# generous enough to absorb a slow generation, short enough that a genuine
+# stall still fails fast for a kiosk. Do NOT change client.py's defaults;
+# other callers (e.g. skin-tone-analysis) may need the looser budget.
+_POLL_INTERVAL_SECONDS = 2.5
+_POLL_MAX_TRIES = 28  # 2.5s * 28 = 70s ceiling
+
 
 def garment_category_for(category: str) -> str:
     """Map a catalog garment category to the YouCam `garment_category` value."""
@@ -95,6 +106,8 @@ async def try_on(person_bytes: bytes, garment_image_url: str, garment_category: 
                 "garment_category": garment_category,
             },
         )
-        result = await client.poll("cloth", task_id)
+        result = await client.poll(
+            "cloth", task_id, interval=_POLL_INTERVAL_SECONDS, max_tries=_POLL_MAX_TRIES
+        )
 
     return {"image": _extract_result_url(result)}
