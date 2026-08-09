@@ -12,19 +12,19 @@
    one is unmistakable at a glance. */
 .measurement-field:not(.sel) { opacity: 0.55; }
 
-/* Selected field: bright accent border + glow ring, on top of the existing
-   background swap, so it reads as "this is what the keypad is editing". */
+/* Selected field: a calm accent border + slightly stronger glass fill, on
+   top of the existing background swap, so it reads as "this is what the
+   keypad is editing" without shouting. A touch of extra border weight is
+   the one restrained cue beyond the border colour itself. */
 .glass-panel.sel {
   border-color: var(--accent);
+  border-width: 2px;
   background: var(--glass-bg-strong);
-  box-shadow: var(--glass-shadow), 0 0 0 3px var(--accent), 0 0 28px 4px var(--accent);
+  box-shadow: var(--glass-shadow);
   opacity: 1;
 }
 
 .field-label { display: flex; align-items: baseline; justify-content: center; gap: 8px; }
-.sel .field-label { color: var(--accent); font-weight: 600; }
-.field-editing { font-size: 14px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--accent); }
 
 .field-value-empty { color: var(--text-dim); font-size: 26px; font-weight: 500; }
 

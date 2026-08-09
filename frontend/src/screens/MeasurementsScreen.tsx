@@ -26,9 +26,7 @@ export function MeasurementsScreen() {
             onClick={() => setField("height")}
             aria-pressed={field === "height"}
           >
-            <p className="field-label">
-              Height{field === "height" && <span className="field-editing">editing</span>}
-            </p>
+            <p className="field-label">Height</p>
             <h1 className={height ? "" : "field-value-empty"}>
               {height ? (<>{height}<span style={{ fontSize: 24 }}> cm</span></>) : "Tap to enter"}
             </h1>
@@ -40,9 +38,7 @@ export function MeasurementsScreen() {
             onClick={() => setField("weight")}
             aria-pressed={field === "weight"}
           >
-            <p className="field-label">
-              Weight{field === "weight" && <span className="field-editing">editing</span>}
-            </p>
+            <p className="field-label">Weight</p>
             <h1 className={weight ? "" : "field-value-empty"}>
               {weight ? (<>{weight}<span style={{ fontSize: 24 }}> kg</span></>) : "Tap to enter"}
             </h1>
