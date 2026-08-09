@@ -14,9 +14,14 @@
   justify-content: center;
   pointer-events: none;
 
-  /* Scoped to this overlay only — deliberately not theme tokens (see above). */
+  /* Scoped to this overlay only — deliberately not theme tokens (see above).
+     --arrow-side-face is the extra tone the 3D forward/backward arrows need
+     for their extruded side (a mid-grey, distinct from both the white lit
+     face and the near-black halo/outline) so the two faces read as
+     separate planes rather than merging into one flat silhouette. */
   --arrow-on-video: #ffffff;
   --arrow-halo: rgba(0, 0, 0, 0.65);
+  --arrow-side-face: #6b6b6b;
 }
 
 .direction-arrow-svg {
@@ -48,20 +53,33 @@
   stroke-width: 7;
 }
 
-/* forward: chevrons spread apart (expand) — come closer / appear bigger. */
-.direction-arrow--forward .direction-arrow-chevron:nth-child(1) {
-  animation: direction-arrow-diverge-a 1.15s ease-in-out infinite;
-}
-.direction-arrow--forward .direction-arrow-chevron:nth-child(2) {
-  animation: direction-arrow-diverge-b 1.15s ease-in-out infinite;
+/* Solid 3D forward/backward arrows. Both faces get their own dark outline
+   (paint-order puts the stroke under the fill) rather than a separate halo
+   path — for a filled shape that's the equivalent of the chevrons'
+   halo+core pair: it guarantees a dark edge against bright video behind
+   the light/mid-grey fills. */
+.direction-arrow-3d {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
 }
 
-/* backward: chevrons pull together (collapse) — step back / appear smaller. */
-.direction-arrow--backward .direction-arrow-chevron:nth-child(1) {
-  animation: direction-arrow-converge-a 1.15s ease-in-out infinite;
+.direction-arrow-3d-side,
+.direction-arrow-3d-face {
+  paint-order: stroke fill;
+  stroke: var(--arrow-halo);
+  stroke-width: 3;
+  stroke-linejoin: round;
 }
-.direction-arrow--backward .direction-arrow-chevron:nth-child(2) {
-  animation: direction-arrow-converge-b 1.15s ease-in-out infinite;
+
+/* Extruded side face: darker, offset — reads as the shadowed flank of a
+   solid object rather than a flat icon. */
+.direction-arrow-3d-side {
+  fill: var(--arrow-side-face);
+}
+
+/* Lit top face. */
+.direction-arrow-3d-face {
+  fill: var(--arrow-on-video);
 }
 
 .direction-arrow--left .direction-arrow-chevron {
@@ -71,22 +89,15 @@
   animation: direction-arrow-nudge-right 1s ease-in-out infinite;
 }
 
-@keyframes direction-arrow-diverge-a {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-7px); }
+/* forward: the arrow nudges toward the viewer (down) — come closer. */
+.direction-arrow--forward .direction-arrow-3d {
+  animation: direction-arrow-nudge-down 1.15s ease-in-out infinite;
 }
-@keyframes direction-arrow-diverge-b {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(7px); }
+/* backward: the arrow nudges away from the viewer (up) — step back. */
+.direction-arrow--backward .direction-arrow-3d {
+  animation: direction-arrow-nudge-up 1.15s ease-in-out infinite;
 }
-@keyframes direction-arrow-converge-a {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(7px); }
-}
-@keyframes direction-arrow-converge-b {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-7px); }
-}
+
 @keyframes direction-arrow-nudge-left {
   0%, 100% { transform: translateX(0); }
   50% { transform: translateX(-9px); }
@@ -95,9 +106,18 @@
   0%, 100% { transform: translateX(0); }
   50% { transform: translateX(9px); }
 }
+@keyframes direction-arrow-nudge-down {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(9px); }
+}
+@keyframes direction-arrow-nudge-up {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-9px); }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .direction-arrow-chevron {
+  .direction-arrow-chevron,
+  .direction-arrow-3d {
     animation: none !important;
   }
 }
