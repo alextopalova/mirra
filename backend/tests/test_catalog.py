@@ -1,9 +1,12 @@
 import json
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
 from app.reco.catalog import Garment, hex_to_lab, load_catalog
+
+_GARMENTS_DIR = Path(__file__).resolve().parents[1] / "data" / "garments"
 
 _VALID_CATEGORIES = {"dress", "top", "pants"}
 _VALID_SEASONS = {"autumn", "spring", "summer", "winter"}
@@ -114,6 +117,35 @@ def test_no_catalog_image_url_points_at_a_placeholder_service():
         assert not any(marker in lowered for marker in placeholder_markers), (
             f"{g.id} image_url looks like a placeholder: {g.image_url}"
         )
+
+
+def test_no_catalog_image_url_is_hot_linked_to_an_external_host():
+    """Garment images are committed to the repo (backend/data/garments/) and
+    served locally -- `image_url` must be a relative `/garments/<id>.jpg`
+    path, never an `http(s)://` link to a third-party CDN. Hot-linking a
+    third party at runtime is both a reliability risk (their host going
+    down breaks try-on) and outside this project's licensing story for the
+    images (see data/garments/SOURCE.md)."""
+    items = load_catalog()
+    for g in items:
+        assert not g.image_url.lower().startswith(("http://", "https://")), (
+            f"{g.id} image_url is hot-linked to an external host: {g.image_url}"
+        )
+        assert g.image_url.startswith("/garments/"), (
+            f"{g.id} image_url should be a local /garments/<id>.jpg path: {g.image_url}"
+        )
+
+
+def test_all_catalog_images_exist_on_disk():
+    """Every `image_url` must resolve to a real file under
+    backend/data/garments/ -- a dangling reference would silently 404 at
+    upload time (or, worse, get proxied to YouCam as a broken ref)."""
+    items = load_catalog()
+    for g in items:
+        filename = g.image_url.removeprefix("/garments/")
+        path = _GARMENTS_DIR / filename
+        assert path.is_file(), f"{g.id} image_url points at a missing file: {path}"
+        assert path.stat().st_size > 0, f"{g.id} image file is empty: {path}"
 
 
 def test_load_catalog_malformed_entry_raises_clear_error(tmp_path):
