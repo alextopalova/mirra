@@ -1,0 +1,103 @@
+/* Like PoseGuide, this is overlaid on the LIVE CAMERA FEED, not the app
+   surface — its contrast can't come from theme tokens: `--text` is dark in
+   the light theme and would vanish against dark clothing or a dim room. So,
+   same as PoseGuide.css, it uses its own fixed high-contrast treatment: a
+   white core stroke plus a wide dark halo stroke behind it (the same
+   technique video subtitles use), which reads on any background — dark or
+   bright, plain or busy — in either theme. */
+.direction-arrow {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+
+  /* Scoped to this overlay only — deliberately not theme tokens (see above). */
+  --arrow-on-video: #ffffff;
+  --arrow-halo: rgba(0, 0, 0, 0.65);
+}
+
+.direction-arrow-svg {
+  width: min(48%, 260px);
+  height: auto;
+  aspect-ratio: 1 / 1;
+  overflow: visible;
+}
+
+.direction-arrow-chevron {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+
+.direction-arrow-halo,
+.direction-arrow-core {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.direction-arrow-halo {
+  stroke: var(--arrow-halo);
+  stroke-width: 13;
+}
+
+.direction-arrow-core {
+  stroke: var(--arrow-on-video);
+  stroke-width: 7;
+}
+
+/* forward: chevrons spread apart (expand) — come closer / appear bigger. */
+.direction-arrow--forward .direction-arrow-chevron:nth-child(1) {
+  animation: direction-arrow-diverge-a 1.15s ease-in-out infinite;
+}
+.direction-arrow--forward .direction-arrow-chevron:nth-child(2) {
+  animation: direction-arrow-diverge-b 1.15s ease-in-out infinite;
+}
+
+/* backward: chevrons pull together (collapse) — step back / appear smaller. */
+.direction-arrow--backward .direction-arrow-chevron:nth-child(1) {
+  animation: direction-arrow-converge-a 1.15s ease-in-out infinite;
+}
+.direction-arrow--backward .direction-arrow-chevron:nth-child(2) {
+  animation: direction-arrow-converge-b 1.15s ease-in-out infinite;
+}
+
+.direction-arrow--left .direction-arrow-chevron {
+  animation: direction-arrow-nudge-left 1s ease-in-out infinite;
+}
+.direction-arrow--right .direction-arrow-chevron {
+  animation: direction-arrow-nudge-right 1s ease-in-out infinite;
+}
+
+@keyframes direction-arrow-diverge-a {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+@keyframes direction-arrow-diverge-b {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(7px); }
+}
+@keyframes direction-arrow-converge-a {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(7px); }
+}
+@keyframes direction-arrow-converge-b {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+@keyframes direction-arrow-nudge-left {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-9px); }
+}
+@keyframes direction-arrow-nudge-right {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(9px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .direction-arrow-chevron {
+    animation: none !important;
+  }
+}

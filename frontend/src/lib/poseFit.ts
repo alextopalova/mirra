@@ -48,9 +48,19 @@ const CROP_MARGIN = 0.02; // landmark this close to a raw frame edge = cropped
 
 export type FitStatus = "searching" | "adjust" | "fit";
 
+/**
+ * Machine-readable movement direction, kept separate from `hint` so the UI
+ * can drive a large arrow overlay without parsing English text.
+ * `forward` = too far away (needs to come closer / appear bigger in frame).
+ * `backward` = too close / cropped (needs to step back / appear smaller).
+ * `null` when the shopper is fit, or not yet detected (searching).
+ */
+export type FitDirection = "forward" | "backward" | "left" | "right" | null;
+
 export interface FitResult {
   status: FitStatus;
   hint: string;
+  direction: FitDirection;
 }
 
 export interface Landmark {
@@ -59,7 +69,11 @@ export interface Landmark {
   visibility?: number;
 }
 
-const SEARCHING: FitResult = { status: "searching", hint: "Step into frame so your whole body is visible" };
+const SEARCHING: FitResult = {
+  status: "searching",
+  hint: "Step into frame so your whole body is visible",
+  direction: null,
+};
 
 /** Decide whether the detected body fits the guide, and what to tell the shopper. */
 export function evaluateFit(landmarks: Landmark[] | undefined, mirror: boolean = MIRROR_PREVIEW): FitResult {
@@ -78,14 +92,14 @@ export function evaluateFit(landmarks: Landmark[] | undefined, mirror: boolean =
   }
 
   if (minY <= CROP_MARGIN || maxY >= 1 - CROP_MARGIN || minX <= CROP_MARGIN || maxX >= 1 - CROP_MARGIN) {
-    return { status: "adjust", hint: "Step back" };
+    return { status: "adjust", hint: "Step back", direction: "backward" };
   }
 
   const bodyHeight = maxY - minY;
   const guideHeight = GUIDE_BOX.yMax - GUIDE_BOX.yMin;
 
-  if (bodyHeight < guideHeight * (1 - SIZE_TOLERANCE)) return { status: "adjust", hint: "Come closer" };
-  if (bodyHeight > guideHeight * (1 + SIZE_TOLERANCE)) return { status: "adjust", hint: "Step back" };
+  if (bodyHeight < guideHeight * (1 - SIZE_TOLERANCE)) return { status: "adjust", hint: "Come closer", direction: "forward" };
+  if (bodyHeight > guideHeight * (1 + SIZE_TOLERANCE)) return { status: "adjust", hint: "Step back", direction: "backward" };
 
   const rawCenterX = (minX + maxX) / 2;
   // Raw landmark coordinates come from the unflipped video frame; mirror them
@@ -93,8 +107,8 @@ export function evaluateFit(landmarks: Landmark[] | undefined, mirror: boolean =
   // what the shopper actually sees in the mirrored preview.
   const displayedCenterX = mirror ? 1 - rawCenterX : rawCenterX;
   const guideCenterX = (GUIDE_BOX.xMin + GUIDE_BOX.xMax) / 2;
-  if (displayedCenterX < guideCenterX - CENTER_TOLERANCE) return { status: "adjust", hint: "Move right" };
-  if (displayedCenterX > guideCenterX + CENTER_TOLERANCE) return { status: "adjust", hint: "Move left" };
+  if (displayedCenterX < guideCenterX - CENTER_TOLERANCE) return { status: "adjust", hint: "Move right", direction: "right" };
+  if (displayedCenterX > guideCenterX + CENTER_TOLERANCE) return { status: "adjust", hint: "Move left", direction: "left" };
 
-  return { status: "fit", hint: "Hold still" };
+  return { status: "fit", hint: "Hold still", direction: null };
 }

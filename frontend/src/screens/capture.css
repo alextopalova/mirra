@@ -37,7 +37,36 @@
   transition: color 0.2s ease;
 }
 .capture-hint-fit { color: var(--accent); font-weight: 800; }
-.capture-error { color: var(--danger); }
 .capture-countdown { position: absolute; inset: 0; display: flex; align-items: center;
   justify-content: center; z-index: 2; font-size: clamp(72px, 26vw, 140px); font-weight: 700;
   color: var(--text); text-shadow: 0 4px 24px rgba(0, 0, 0, 0.5); }
+
+/* "Redo the auto-capture" fallback — sits on top of the camera window
+   (not below it) so it's reachable the moment something has genuinely
+   failed: camera denied, pose model failed to load, or the no-fit timeout
+   elapsed. Its own scrim/panel is opaque theme glass (not the light-on-video
+   treatment DirectionArrow/PoseGuide use) because it's a solid UI panel
+   covering the feed, not artwork drawn transparently over live video. */
+.capture-restart-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: var(--pad);
+  text-align: center;
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+.capture-restart-message {
+  font-size: clamp(20px, 3.2vw, 28px);
+  font-weight: 700;
+  color: var(--text);
+  max-width: 90%;
+}

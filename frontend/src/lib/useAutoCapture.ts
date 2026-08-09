@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { FilesetResolver, PoseLandmarker } from "@mediapipe/tasks-vision";
-import { evaluateFit, MIRROR_PREVIEW, type FitStatus } from "./poseFit";
+import { evaluateFit, MIRROR_PREVIEW, type FitDirection, type FitStatus } from "./poseFit";
 
 // Google's official model CDN — lite model, loaded at runtime (never bundled).
 const MODEL_URL =
@@ -19,14 +19,24 @@ export interface AutoCaptureState {
   phase: AutoCapturePhase;
   fitStatus: FitStatus;
   hint: string;
-  showManualFallback: boolean;
+  direction: FitDirection;
+  /** True once genuine detection has failed: model load error, or the
+   * no-fit fallback timeout elapsed. Drives the "restart scan" affordance —
+   * never a manual-capture button (there is no such path any more). */
+  needsRestart: boolean;
+  /** Re-attempts detection from scratch: resets the fit/stability state and
+   * the fallback timer, and — if the model previously failed to load —
+   * re-initialises the pose detector. Does not touch the camera stream;
+   * that's the caller's responsibility if the camera itself is what failed. */
+  restart: () => void;
 }
 
-const INITIAL_STATE: AutoCaptureState = {
+const INITIAL_STATE: Omit<AutoCaptureState, "restart"> = {
   phase: "loading",
   fitStatus: "searching",
   hint: "Loading camera guide…",
-  showManualFallback: false,
+  direction: null,
+  needsRestart: false,
 };
 
 // Module-level singleton: the (multi-MB, CDN-fetched) model is loaded once
@@ -56,12 +66,20 @@ export function useAutoCapture(
   step: "front" | "side",
   onFit: () => void
 ): AutoCaptureState {
-  const [state, setState] = useState<AutoCaptureState>(INITIAL_STATE);
+  const [state, setState] = useState<Omit<AutoCaptureState, "restart">>(INITIAL_STATE);
   const onFitRef = useRef(onFit);
   onFitRef.current = onFit;
 
-  // Detection loop: (re)started whenever enabled/step changes, torn down on
-  // cleanup. Does not touch the shared landmarker singleton's lifecycle.
+  // Bumped by `restart()` to force the detection effect below to re-run even
+  // when `enabled`/`step` haven't changed — e.g. the "restart scan" button
+  // after a no-fit timeout or a failed model load.
+  const [resetToken, setResetToken] = useState(0);
+  const restart = () => setResetToken((n) => n + 1);
+
+  // Detection loop: (re)started whenever enabled/step/resetToken changes,
+  // torn down on cleanup. Does not touch the shared landmarker singleton's
+  // lifecycle (that's the effect below), beyond clearing it on load failure
+  // so a subsequent restart re-fetches instead of replaying the same error.
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
@@ -73,7 +91,7 @@ export function useAutoCapture(
     setState({ ...INITIAL_STATE });
 
     const fallbackTimer = window.setTimeout(() => {
-      if (!cancelled) setState((s) => ({ ...s, showManualFallback: true }));
+      if (!cancelled) setState((s) => ({ ...s, needsRestart: true }));
     }, FALLBACK_TIMEOUT_MS);
 
     getLandmarker()
@@ -90,7 +108,7 @@ export function useAutoCapture(
             const landmarks = result.landmarks?.[0];
             const fit = evaluateFit(landmarks, MIRROR_PREVIEW);
             consecutiveGood = fit.status === "fit" ? consecutiveGood + 1 : 0;
-            setState((s) => ({ ...s, fitStatus: fit.status, hint: fit.hint }));
+            setState((s) => ({ ...s, fitStatus: fit.status, hint: fit.hint, direction: fit.direction }));
             if (consecutiveGood >= STABLE_FRAMES_NEEDED && !fired) {
               fired = true;
               onFitRef.current();
@@ -101,12 +119,16 @@ export function useAutoCapture(
         rafId = requestAnimationFrame(loop);
       })
       .catch(() => {
+        // Clear the cached (rejected) singleton promise so a later restart()
+        // actually retries the fetch instead of replaying this same failure.
+        landmarkerPromise = null;
         if (!cancelled) {
           setState({
             phase: "unavailable",
             fitStatus: "searching",
-            hint: "Auto-capture unavailable — use the button below.",
-            showManualFallback: true,
+            hint: "Auto-capture couldn't start.",
+            direction: null,
+            needsRestart: true,
           });
         }
       });
@@ -116,7 +138,7 @@ export function useAutoCapture(
       window.clearTimeout(fallbackTimer);
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, [enabled, step, videoRef]);
+  }, [enabled, step, videoRef, resetToken]);
 
   // Final teardown of the shared detector — only on the CaptureScreen
   // unmounting entirely, not on every front/side step change.
@@ -128,5 +150,5 @@ export function useAutoCapture(
     };
   }, []);
 
-  return state;
+  return { ...state, restart };
 }

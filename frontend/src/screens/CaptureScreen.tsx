@@ -3,6 +3,7 @@ import { useSession } from "../state/session";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { PoseGuide, type GuideState } from "../components/PoseGuide";
 import { CaptureFeedback, type CaptureFeedbackKind } from "../components/CaptureFeedback";
+import { DirectionArrow } from "../components/DirectionArrow";
 import { useAutoCapture } from "../lib/useAutoCapture";
 import { MIRROR_PREVIEW } from "../lib/poseFit";
 import "./capture.css";
@@ -20,6 +21,9 @@ export function CaptureScreen() {
   const [step, setStep] = useState<"front" | "side">("front");
   const [count, setCount] = useState<number | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  // Bumped by the restart-scan button to genuinely re-request the camera
+  // (not just hide the error) when that's what failed.
+  const [cameraAttempt, setCameraAttempt] = useState(0);
   // Matches the live camera's own aspect ratio once known, so the stage
   // isn't a mismatched tall box the shopper has to retreat far to fill.
   const [stageAspect, setStageAspect] = useState("3 / 4");
@@ -88,7 +92,7 @@ export function CaptureScreen() {
       cancelled = true;
       stream?.getTracks().forEach((t) => t.stop());
     };
-  }, []);
+  }, [cameraAttempt]);
 
   const handleLoadedMetadata = () => {
     const v = videoRef.current;
@@ -125,8 +129,11 @@ export function CaptureScreen() {
     timerRef.current = id;
   };
 
+  // Fires only from the auto-capture hook's onFit callback below — there is
+  // no button that calls this. The guard protects against the hook somehow
+  // signalling fit twice in a row (e.g. across a fast step transition).
   const capture = () => {
-    if (timerRef.current !== null) return; // guards against double-fire (auto + manual, or double tap)
+    if (timerRef.current !== null) return;
     runCountdown(() => {
       const img = snap();
       if (step === "front") {
@@ -155,10 +162,30 @@ export function CaptureScreen() {
     guideState = count !== null ? "fit" : auto.phase === "loading" ? "idle" : auto.fitStatus;
   }
 
-  // Manual capture is the safety net, not the default UI — it only appears
-  // if the camera is denied, pose detection fails to load, or no fit is
-  // reached within the hook's fallback window. The kiosk must never dead-end.
-  const showManualButton = !!cameraError || auto.showManualFallback;
+  // The large movement arrow only makes sense while we're actively steering
+  // the shopper toward a fit — not mid-countdown, mid-feedback overlay, or
+  // once things have failed outright.
+  const direction = !cameraError && feedback === null && count === null ? auto.direction : null;
+
+  // There is no manual-capture path any more — this is purely a "something
+  // genuinely failed, redo the auto-capture" affordance: camera denied,
+  // pose detection failed to load, or no fit reached within the hook's
+  // fallback window. The kiosk must never dead-end, so it's always reachable
+  // (on top of the camera window) whenever one of those is true.
+  const needsRestart = !!cameraError || auto.needsRestart;
+
+  // Genuinely re-attempts detection, not just hiding the fallback UI: resets
+  // the fit/stability state and fallback timer, re-initialises the pose
+  // detector if that's what failed (see useAutoCapture's restart), and
+  // re-requests the camera if that's what failed.
+  const restartScan = () => {
+    if (cameraError) {
+      setCameraError(null);
+      setCameraAttempt((n) => n + 1);
+    } else {
+      auto.restart();
+    }
+  };
 
   const heading =
     feedback === "success" ? "Captured!" :
@@ -178,33 +205,33 @@ export function CaptureScreen() {
           className={MIRROR_PREVIEW ? "mirrored" : ""}
         />
         <PoseGuide variant={step} state={guideState} />
+        <DirectionArrow direction={direction} />
         {count !== null && <div className="capture-countdown">{count}</div>}
         {feedback !== null && <CaptureFeedback kind={feedback} exiting={feedbackExiting} />}
+        {needsRestart && feedback === null && (
+          <div className="capture-restart-overlay">
+            <p className="capture-restart-message">
+              {cameraError ?? "Still getting you in frame — let's try again."}
+            </p>
+            <PrimaryButton label="Restart scan" onClick={restartScan} />
+          </div>
+        )}
       </div>
-      {cameraError ? (
-        <p className="capture-hint capture-error">{cameraError}</p>
-      ) : feedback === null ? (
+      {feedback === null && !needsRestart ? (
         <p className={`capture-hint${auto.fitStatus === "fit" ? " capture-hint-fit" : ""}`}>
           {count !== null ? "Hold still" : auto.hint}
         </p>
       ) : null}
-      <div className="actions">
-        {showManualButton && (
-          <PrimaryButton
-            label={step === "front" ? "Capture front" : "Capture side"}
-            onClick={capture}
-            disabled={!!cameraError || count !== null || feedback !== null}
-          />
-        )}
-        {step === "side" && (
+      {step === "side" && (
+        <div className="actions">
           <PrimaryButton
             label="Skip side"
             variant="ghost"
             onClick={() => go("measurements")}
             disabled={feedback !== null}
           />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
