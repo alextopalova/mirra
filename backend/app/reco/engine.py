@@ -21,7 +21,7 @@ _FALLBACK_REASON = "A strong match for you"
 
 
 def _color_match_reason(season: str | None) -> str:
-    return f"{season} palette match" if season else "Your colour match"
+    return f"{season} palette match" if season else "Your palette match"
 
 
 def rank(

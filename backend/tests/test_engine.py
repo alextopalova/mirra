@@ -63,4 +63,4 @@ def test_rank_without_season_falls_back_to_generic_color_reason():
     target = dresses[0]
     recs = rank(_p(), [target.color_lab], "dress", "date night", cat)
     match = next(r for r in recs if r["garment"].id == target.id)
-    assert any("colour match" in r.lower() for r in match["reasons"])
+    assert any("palette match" in r.lower() for r in match["reasons"])
