@@ -26,7 +26,11 @@ export function CaptureScreen() {
   const [cameraAttempt, setCameraAttempt] = useState(0);
   // Matches the live camera's own aspect ratio once known, so the stage
   // isn't a mismatched tall box the shopper has to retreat far to fill.
-  const [stageAspect, setStageAspect] = useState("3 / 4");
+  // `ratio` feeds the CSS `aspect-ratio` property (w/h syntax); `num` is the
+  // same ratio as a plain number so the width calc in capture.css can derive
+  // whichever of width/height is the binding constraint (see that file) —
+  // `aspect-ratio` alone can't do that when it's fighting a max-height clamp.
+  const [stageAspect, setStageAspect] = useState({ ratio: "3 / 4", num: 3 / 4 });
   const timerRef = useRef<number | null>(null);
 
   // Big "photo captured" / "turn to your side" overlays shown between
@@ -96,7 +100,9 @@ export function CaptureScreen() {
 
   const handleLoadedMetadata = () => {
     const v = videoRef.current;
-    if (v && v.videoWidth && v.videoHeight) setStageAspect(`${v.videoWidth} / ${v.videoHeight}`);
+    if (v && v.videoWidth && v.videoHeight) {
+      setStageAspect({ ratio: `${v.videoWidth} / ${v.videoHeight}`, num: v.videoWidth / v.videoHeight });
+    }
   };
 
   const snap = (): string => {
@@ -195,7 +201,10 @@ export function CaptureScreen() {
   return (
     <div className="screen">
       <h2 className="capture-heading">{heading}</h2>
-      <div className="capture-stage" style={{ "--capture-aspect": stageAspect } as CSSProperties}>
+      <div
+        className="capture-stage"
+        style={{ "--capture-aspect": stageAspect.ratio, "--capture-aspect-num": stageAspect.num } as CSSProperties}
+      >
         <video
           ref={videoRef}
           autoPlay
@@ -222,16 +231,6 @@ export function CaptureScreen() {
           {count !== null ? "Hold still" : auto.hint}
         </p>
       ) : null}
-      {step === "side" && (
-        <div className="actions">
-          <PrimaryButton
-            label="Skip side"
-            variant="ghost"
-            onClick={() => go("measurements")}
-            disabled={feedback !== null}
-          />
-        </div>
-      )}
     </div>
   );
 }

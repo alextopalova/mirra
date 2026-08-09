@@ -1,11 +1,27 @@
 .capture-stage {
   position: relative;
-  width: min(92vw, 640px);
-  max-height: 72vh;
-  /* Falls back to a portrait default until the camera's real aspect ratio
-     is known (see CaptureScreen's onLoadedMetadata), then matches it so the
-     shopper doesn't have to retreat far to fit in a mismatched tall box. */
+  /* Falls back to a portrait default until the camera's real aspect ratio is
+     known (see CaptureScreen's onLoadedMetadata), then matches it so the
+     shopper doesn't have to retreat far to fit in a mismatched tall box.
+     `--capture-aspect-num` is the same ratio as a plain number (width/height).
+
+     Width and max-height used to be two INDEPENDENT constraints (width fixed
+     at min(92vw, 640px), height separately capped at 72vh). When the height
+     cap was the binding one, the box kept full width but got shorter than
+     the aspect-ratio called for, and `aspect-ratio` had no room left to
+     apply — the video (object-fit: contain) then let sizes itself down to
+     fit that shrunken box and letterboxed with empty bands on the sides.
+     That's especially visible on the side/profile step, where a narrow
+     portrait subject makes the wasted horizontal space obvious.
+
+     Fix: derive width as the min of ALL three limits — 92vw, 640px, and
+     "the widest this can be while a height of 72vh still satisfies the
+     aspect ratio" (72vh * ratio) — so whichever dimension actually binds,
+     the other is computed from it via `aspect-ratio` (height defaults to
+     auto) and the box always exactly matches the camera's aspect. No
+     independent max-height clamp remains to fight the ratio. */
   aspect-ratio: var(--capture-aspect, 3 / 4);
+  width: min(92vw, 640px, calc(72vh * var(--capture-aspect-num, 0.75)));
   border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--glass-border);
