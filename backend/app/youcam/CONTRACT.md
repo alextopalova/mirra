@@ -1,154 +1,105 @@
-# YouCam / Perfect Corp S2S API — Integration Contract
+# YouCam / Perfect Corp S2S API — VERIFIED Integration Contract
 
-Source: extracted from `yce.perfectcorp.com/document`, `app-cdn-01.perfectcorp.com/.../ai-api`,
-the ReadMe `docs.perfectcorp.com/reference/*` pages, and a working `cloth` reference build.
-Some exact JSON field names are SPA-gated in the docs and marked **UNCONFIRMED** — verify in the
-API playground during Phase 5 before shipping.
+**Status: verified live against the real API on 2026-08-09** with the project's own key.
+Everything below was confirmed by actual HTTP calls, not inferred from docs.
 
-## Two API generations — we build against **Generation B**
+## Base + Auth (VERIFIED)
 
-| | Gen A (older S2S) | **Gen B (current YouCam API) ← USE THIS** |
-|---|---|---|
-| Base host | `https://yce-api-01.perfectcorp.com` | `https://yce-api-01.makeupar.com` |
-| Path prefix | `/s2s/v1.0/...` | `/s2s/v2.0/...` (skin-analysis: `/s2s/v2.1/...`) |
-| Auth | RSA `id_token` → `access_token` | Bearer token (likely still obtained via the same RSA exchange) |
+- Base host: `https://yce-api-01.makeupar.com` (`https://yce-api-01.perfectcorp.com` also responds identically).
+- **Auth: the `sk-…` API key works DIRECTLY as a bearer token.** No RSA `id_token` exchange, no client secret needed.
+  ```
+  Authorization: Bearer <YOUCAM_API_KEY>
+  ```
+- Credit balance: `GET /s2s/v1.0/client/credit` → `results[].amount`. Confirmed **1000 units** available (`ApiPaygToken`).
+- Feature costs: `GET /s2s/v2.0/credit/feature-cost` → `result.skus[]`.
+  **CAVEAT: this list is NOT exhaustive** — it returned 20 image/hair SKUs and did *not* include `cloth` or
+  `skin-tone-analysis`, yet both endpoints exist and are authorized. Do not use it to decide what is callable.
 
-## 1. Auth
+## Endpoint availability (VERIFIED by direct probe)
 
-Two possible modes — the client supports both; **default to Mode A, fall back to Mode B**:
+| Endpoint | Status |
+|---|---|
+| `POST /s2s/v2.0/file/{task}` | ✅ exists |
+| `POST /s2s/v2.0/task/cloth` (Apparel VTO) | ✅ exists + authorized |
+| `POST /s2s/v2.0/task/skin-tone-analysis` | ✅ exists + authorized |
+| `POST /s2s/v2.1/task/skin-analysis` | ✅ exists + authorized |
+| `POST /s2s/v2.0/task/face-analyzer` | ❌ **404 — does not exist.** The Face Attributes add-on is unavailable at this path. |
 
-- **Mode A (try first):** use the `sk-…` API key directly as `Authorization: Bearer <API_KEY>`.
-  We only have a single `sk-` key, and the v2 docs phrase auth as "include your API key as Bearer token."
-- **Mode B (fallback, needs a client secret):** RSA `id_token` exchange.
-  - `POST https://yce-api-01.perfectcorp.com/s2s/v1.0/client/auth`
-  - body: `{ "client_id": "<API_KEY>", "id_token": "<b64(RSA_encrypt('client_id=<id>&timestamp=<epoch_ms>', client_secret_pubkey))>" }`
-  - `client_secret` **is an RSA X.509 public key (PEM/Base64)**; encrypt with PKCS#1 v1.5 (**padding UNCONFIRMED** — PerfectCorp samples use `RSA/ECB/PKCS1Padding`).
-  - response: `access_token` (valid **2 hours**) → send as Bearer on all subsequent calls.
+## 1. Upload flow (VERIFIED end-to-end)
 
-> **ACTION:** if Mode A returns 401, we need the **client secret / RSA public key** from the YouCam console
-> (`env YOUCAM_API_SECRET`). Ask the user for it then.
-
-- Credit balance: `GET /s2s/v1.0/client/credit`. Feature cost: `GET /s2s/v2.0/credit/feature-cost`.
-
-## 2. Upload (3-step presigned) — CONFIRMED pattern
-
-1. `POST /s2s/v2.0/file/{task}` body `{ "files": [ { "content_type": "image/jpeg", "file_name": "img.jpg", "file_size": <bytes> } ] }`
-   → response has `file_id` and `requests[]` (each `{ url, headers, method }` — presigned S3).
-2. `PUT requests[0].url` with the raw bytes and `requests[0].headers`.
-3. Reference the image in tasks by `src_file_id = file_id` (or pass a **public** image URL instead).
-
-Fashion/try-on tasks effectively **require public URLs or uploaded file_ids** (no inline base64). Images ≤ **10 MB**; many tasks want long side ≤ 1024px, near-frontal face.
-
-## 3. AI Skin Tone / Facial Color Tones (personal color)
-
-- Create: `POST /s2s/v2.0/task/skin-tone-analysis` body `{ "src_file_id": "<id>" }` (or image URL). Extra params UNCONFIRMED.
-- Poll: `GET /s2s/v2.0/task/skin-tone-analysis/{task_id}` → `task_status` ∈ `running|success|error`.
-- Result outputs (confirmed *kinds*): skin tone, undertone (warm/cool/neutral), Fitzpatrick, eye/eyebrow/lip/hair colors. **Exact field names UNCONFIRMED.**
-- **Season label: NOT returned by the API (best evidence).** Derive season ourselves from undertone + depth. Mapping lives in `color.py`.
-
-## 4. AI Clothes / Apparel VTO — `cloth` (the try-on)
-
-- Create: `POST /s2s/v2.0/task/cloth` (CONFIRMED path) body (confirmed field *names*, some values UNCONFIRMED):
-  - person: `src_file_id` **or** `src_file_url` (public)
-  - garment: `ref_file_id` **or** `ref_file_urls` (array of public URLs)
-  - `garment_category` (**required**; enum e.g. upper/lower/full-body/`auto` — exact values UNCONFIRMED)
-  - `change_shoes` (bool, optional)
-- Garment image: JPG/PNG ≤10MB; flat-lay **or** on-model both supported. Person: full/half-body or selfie.
-- Poll: `GET /s2s/v2.0/task/cloth/{task_id}` → `task_status`. Reference build polls every 2s up to 120×.
-- Result image URL: in the success payload results array — pattern `results[].data[].url` (+ `dst_id`). **Exact path UNCONFIRMED.**
-
-## 5. AI Face Attributes & Ratio (optional add-on)
-
-- Create: `POST /s2s/v2.0/task/face-analyzer` body `{ "src_file_id": "<id>" }`. Poll `GET /s2s/v2.0/task/face-analyzer/{task_id}`.
-- Outputs: 11 facial ratios + face/eye/lip/brow shape from 80+ landmarks. **Exact field names UNCONFIRMED.**
-
-## 6. Async pattern, limits, quirks
-
-- Pattern: create (`POST .../task/{type}` → `task_id`) → poll (`GET .../task/{type}/{task_id}`) until `task_status` `success`/`error` → read result URL(s).
-- Rate limit (Gen B): **250 req / 300s, 5 QPS**. Exceed → 429.
-- **Poll promptly** — a task can be dropped if not polled within ~10s of readiness.
-- Uploads deleted ~24h; result URLs valid ~2h.
-- Cost per call: query `/s2s/v2.0/credit/feature-cost` at runtime (don't hardcode). Free budget = 1,000 units — cache per session, use `USE_MOCKS=true` in dev.
-
-## 7. Reference client implementation (Gen B)
-
-Use this in `app/youcam/client.py` (reconcile the UNCONFIRMED bits against the playground in Phase 5).
-Note the signatures: `upload(task, bytes)`, `run(task, payload)`, `poll(task, task_id)` — update
-`tests/test_youcam_client.py` to match.
-
-```python
-import asyncio, base64, time
-import httpx
-from app.config import settings
-
-BASE = "https://yce-api-01.makeupar.com"
-AUTH_BASE = "https://yce-api-01.perfectcorp.com"
-
-class YouCamClient:
-    def __init__(self, transport=None):
-        self._client = httpx.AsyncClient(base_url=BASE, transport=transport, timeout=60)
-        self._token: str | None = None
-
-    async def _bearer(self) -> str:
-        # Mode A: sk- key used directly as bearer.
-        if not settings.youcam_api_secret:
-            return settings.youcam_api_key
-        # Mode B: RSA id_token -> access_token (needs client_secret = RSA public key PEM).
-        if self._token:
-            return self._token
-        from cryptography.hazmat.primitives.asymmetric import padding
-        from cryptography.hazmat.primitives.serialization import load_pem_public_key
-        pub = load_pem_public_key(settings.youcam_api_secret.encode())
-        plain = f"client_id={settings.youcam_api_key}&timestamp={int(time.time()*1000)}".encode()
-        id_token = base64.b64encode(pub.encrypt(plain, padding.PKCS1v15())).decode()
-        async with httpx.AsyncClient(base_url=AUTH_BASE, timeout=30) as ac:
-            r = await ac.post("/s2s/v1.0/client/auth",
-                              json={"client_id": settings.youcam_api_key, "id_token": id_token})
-            r.raise_for_status()
-            self._token = r.json()["access_token"]
-        return self._token
-
-    async def _headers(self) -> dict:
-        return {"Authorization": f"Bearer {await self._bearer()}"}
-
-    async def upload(self, task: str, image_bytes: bytes, content_type: str = "image/jpeg") -> str:
-        h = await self._headers()
-        r = await self._client.post(f"/s2s/v2.0/file/{task}", headers=h, json={
-            "files": [{"content_type": content_type, "file_name": "img.jpg", "file_size": len(image_bytes)}]
-        })
-        r.raise_for_status()
-        d = r.json()
-        file_id = d.get("file_id") or d["result"][0]["file_id"]          # verify shape in playground
-        req = (d.get("requests") or d.get("result"))[0]
-        async with httpx.AsyncClient(timeout=60) as put:
-            pr = await put.request(req.get("method", "PUT"), req["url"],
-                                   content=image_bytes, headers=req.get("headers", {}))
-            pr.raise_for_status()
-        return file_id
-
-    async def run(self, task: str, payload: dict) -> str:
-        h = await self._headers()
-        r = await self._client.post(f"/s2s/v2.0/task/{task}", headers=h, json=payload)
-        r.raise_for_status()
-        return r.json()["task_id"]
-
-    async def poll(self, task: str, task_id: str, interval: float = 2.0, max_tries: int = 120) -> dict:
-        h = await self._headers()
-        for _ in range(max_tries):
-            r = await self._client.get(f"/s2s/v2.0/task/{task}/{task_id}", headers=h)
-            r.raise_for_status()
-            d = r.json()
-            st = d.get("task_status") or d.get("status")
-            if st in ("success", "completed", "done"):
-                return d
-            if st in ("error", "failed"):
-                raise RuntimeError(f"YouCam task failed: {d}")
-            await asyncio.sleep(interval)
-        raise TimeoutError("YouCam task timed out")
+**Step 1 — create file entry:**
+`POST /s2s/v2.0/file/{task}` (e.g. `/s2s/v2.0/file/cloth`), JSON:
+```json
+{ "files": [ { "content_type": "image/jpeg", "file_name": "p.jpg", "file_size": 111250 } ] }
 ```
+Response (**note the nesting — it is NOT top-level**):
+```json
+{ "status": 200,
+  "data": { "files": [ {
+      "file_id": "<opaque id>",
+      "requests": [ { "method": "PUT", "url": "<presigned S3 URL>", "headers": [...] } ]
+  } ] } }
+```
+Read as: `resp["data"]["files"][0]["file_id"]` and `...["requests"][0]`.
+`requests[0]["headers"]` may be a LIST of `{name, value}` objects — normalise to a dict before passing to httpx.
 
-## 8. To verify live in the playground (Phase 5)
-- Whether the `sk-` key works as a direct bearer (Mode A) or Mode B is required (→ get client secret).
-- Exact result field names for `skin-tone-analysis` and `cloth`; the result-image URL path.
-- `garment_category` enum values.
-- Upload response shape (`file_id`/`requests` vs `result`).
+**Step 2 — upload bytes:** `PUT` the raw image bytes to `requests[0]["url"]` with those headers. Returns 200.
+
+**Step 3 —** reference the image as `src_file_id` in the task call.
+
+## 2. Apparel VTO — `POST /s2s/v2.0/task/cloth` (VERIFIED WORKING)
+
+Accepted parameters (exact names, from the API's own 400 error):
+`src_file_url`, `src_file_id`, `ref_file_url`, `ref_file_id`, `garment_category`, `template_id`.
+
+- Person image: `src_file_id` (uploaded) **or** `src_file_url` (public URL).
+- Garment: `ref_file_url` (**singular** — `ref_file_urls` plural is REJECTED) or `ref_file_id`.
+- `garment_category`: **required**. **VERIFIED live — the accepted values are exactly `upper_body`, `lower_body`, `full_body`.** Anything else (e.g. `dresses`, `bogus_value`) returns `400 "garment_category is not one of the accepted values."` Catalog mapping: `top` → `upper_body`, `pants` → `lower_body`, `dress` → `full_body`.
+
+Verified working request:
+```json
+{ "src_file_id": "<file_id>",
+  "ref_file_url": "https://.../garment.jpg",
+  "garment_category": "upper_body" }
+```
+Response: `{ "status": 200, "data": { "task_id": "<id>" } }`
+
+**Poll:** `GET /s2s/v2.0/task/cloth/{task_id}` →
+```json
+{ "data": { "status": "success", "error": null, "results": { "url": "<result image URL>" } } }
+```
+**`results` is an OBJECT with a `url` key** (not an array as older docs suggest). Handle both shapes defensively.
+Result URLs are presigned and expire in ~2 hours. Poll every ~2.5s; the generation takes tens of seconds.
+
+> **⚠️ VERIFIED LIVE (2026-08-09) — the polling status field name DIFFERS PER ENDPOINT:**
+> - `task/cloth` → the terminal-state field is `status` (`{"data": {"status": "success", ...}}`).
+> - `task/skin-tone-analysis` → the terminal-state field is **`task_status`**, not `status`
+>   (see the real error payload below). `data.status` is simply absent on this endpoint.
+>
+> **Clients must accept both field names** (prefer `task_status` if present, else `status`) or a
+> skin-tone-analysis error/success will look like "missing status" and the poller will spin until
+> it times out (~150s) instead of surfacing the result. `app/youcam/client.py::poll()` does this.
+
+## 3. Skin Tone Analysis — `POST /s2s/v2.0/task/skin-tone-analysis`
+
+Exists and is authorized. Requires `src_file_url` or `src_file_id` (same upload flow).
+Result field names NOT yet verified live — inspect the poll payload on first real call and adapt.
+**Season label is NOT expected to be returned** — derive the season from the returned tone/undertone values
+in `app/youcam/color.py`.
+
+**Poll uses `task_status`, not `status` (VERIFIED live error payload):**
+```json
+{ "error": "error_face_not_forward_facing", "results": null, "task_status": "error" }
+```
+- The terminal state is in `data.task_status` (`"error"` here), not `data.status`.
+- **`error` sometimes comes back as the literal string `"None"` (not JSON `null`)** on other failures —
+  treat `"None"`/`"none"`/empty string as "no detail available" and fall back to reporting the raw
+  payload rather than surfacing the useless text `"None"` to the caller.
+- **Input requirement, verified live:** the source image must show a single **forward-facing face of
+  adequate size/resolution**. A downscaled full-body photo was rejected with
+  `error_face_not_forward_facing` — crop/zoom to a clear frontal face shot before calling this endpoint.
+
+## 4. Budget
+
+1000 units total. A `cloth` generation costs a small number of units per call (exact SKU not listed).
+Cache per session; keep `USE_MOCKS=true` during development; only call live for real runs and the demo.

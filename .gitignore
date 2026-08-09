@@ -1,4 +1,14 @@
 node_modules/
 .next/
 .env*
+!.env.example
 .DS_Store
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+.idea/
+backend/models/*.task
+backend/models/*.tflite
+example_picture.jpg

@@ -1,0 +1,17 @@
+:root {
+  --bg-gradient: radial-gradient(120% 120% at 30% 15%, #2A3B52 0%, #16202F 55%, #0B111C 100%);
+  --glass-bg: rgba(255, 255, 255, 0.08);
+  --glass-bg-strong: rgba(255, 255, 255, 0.14);
+  --glass-border: rgba(255, 255, 255, 0.18);
+  --glass-blur: 24px;
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  --accent: #5B9DFF;
+  --accent-strong: #3B7EF0;
+  --danger: #FF6B6B;
+  --text: #FFFFFF;
+  --text-dim: rgba(255, 255, 255, 0.70);
+  --radius: 28px;
+  --touch: 72px;
+  --pad: 32px;
+  --font: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}

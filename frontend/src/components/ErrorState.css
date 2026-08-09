@@ -1,0 +1,6 @@
+.error-state-heading {
+  color: var(--danger);
+}
+.error-state-message {
+  color: var(--text-dim);
+}

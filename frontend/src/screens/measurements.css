@@ -1,0 +1,3 @@
+.field-btn { display: block; width: 100%; min-height: var(--touch); cursor: pointer;
+  background: none; border: none; padding: 0; text-align: inherit; font: inherit; color: inherit; }
+.glass-panel.sel { border-color: var(--accent); background: var(--glass-bg-strong); }
