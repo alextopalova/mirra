@@ -1,3 +1,38 @@
-.body-type-diagram { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.body-type-diagram-fruit { font-size: 22px; font-weight: 600; text-transform: capitalize; }
-.body-type-diagram-japanese { color: var(--text-dim); text-transform: capitalize; }
+.body-type-diagram { display: flex; flex-direction: column; align-items: center; }
+
+/* The silhouette floats on the ambient background with a soft accent glow
+   behind it, rather than sitting in its own glass box — it reads as the
+   illustrated centerpiece of this half of the report, not a dashboard card. */
+.btd-figure { position: relative; display: flex; justify-content: center; padding-top: 8px; }
+.btd-figure::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  width: 200px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 32%, transparent), transparent 72%);
+  filter: blur(2px);
+  z-index: 0;
+}
+.btd-svg { position: relative; z-index: 1; width: clamp(120px, 18vw, 190px); height: auto; }
+
+.btd-torso { stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
+.btd-head, .btd-neck { fill: var(--glass-bg-strong); stroke: var(--accent); stroke-width: 2.5; }
+.btd-neck { stroke: none; }
+
+.btd-lean { margin-top: 20px; width: min(100%, 300px); }
+.btd-lean-bar {
+  display: flex; gap: 3px; height: 10px; border-radius: 999px;
+  overflow: hidden; background: var(--glass-bg);
+}
+.btd-lean-seg { display: block; height: 100%; background: var(--glass-bg-strong); }
+.btd-lean-seg.is-dominant { background: var(--accent); }
+.btd-lean-caption { margin-top: 10px; font-size: 18px; color: var(--text-dim); }
+
+.btd-guidance { margin-top: 20px; display: flex; flex-direction: column; gap: 8px; max-width: 340px; }
+.btd-guidance p { font-size: 19px; line-height: 1.4; color: var(--text-dim); margin: 0; }
+
+@media (max-width: 480px) {
+  .btd-figure::before { width: 160px; height: 180px; }
+}
