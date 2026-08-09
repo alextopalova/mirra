@@ -1,5 +1,17 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body, #root { height: 100%; width: 100%; }
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  /* iOS/macOS Safari sizes 100vh to the *largest* possible viewport (as if
+     the address/toolbar were hidden), which is taller than what's actually
+     visible. Combined with overflow:hidden below, that pushed the bottom of
+     tall screens (e.g. the measurements keypad) off-screen and unreachable.
+     `-webkit-fill-available` and `dvh` both track the real, current visible
+     viewport; declared after `100%`/`100vh` they upgrade browsers that
+     understand them and are ignored by ones that don't. */
+  height: -webkit-fill-available;
+  height: 100dvh;
+}
 html {
   /* Kiosk chrome: the app is the whole viewport, never a scrollable page. */
   overflow: hidden;
@@ -18,7 +30,15 @@ body {
   scrollbar-width: none;
 }
 body::-webkit-scrollbar { display: none; }
-#root { display: flex; flex-direction: column; min-height: 100%; max-height: 100vh; overflow: hidden; }
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  max-height: 100vh;
+  max-height: -webkit-fill-available;
+  max-height: 100dvh;
+  overflow: hidden;
+}
 h1 { font-size: 56px; font-weight: 700; letter-spacing: -0.02em; }
 h2 { font-size: 34px; font-weight: 600; }
 p { font-size: 22px; color: var(--text-dim); }

@@ -14,19 +14,38 @@ export function MeasurementsScreen() {
   const ready = height !== "" && weight !== "";
 
   return (
-    <div className="screen">
+    <div className="screen screen-measurements">
       <h2>A couple of numbers</h2>
-      <div style={{ display: "flex", gap: 24 }}>
-        <GlassPanel className={field === "height" ? "sel" : ""}>
-          <button className="field-btn" onClick={() => setField("height")}>
-            <p>Height</p>
-            <h1>{height || "—"}<span style={{ fontSize: 24 }}> cm</span></h1>
+      <p className="measurements-hint">
+        Enter your height, then your weight — tap a field to switch.
+      </p>
+      <div className="measurements-fields">
+        <GlassPanel className={`measurement-field ${field === "height" ? "sel" : ""}`}>
+          <button
+            className="field-btn"
+            onClick={() => setField("height")}
+            aria-pressed={field === "height"}
+          >
+            <p className="field-label">
+              Height{field === "height" && <span className="field-editing">editing</span>}
+            </p>
+            <h1 className={height ? "" : "field-value-empty"}>
+              {height ? (<>{height}<span style={{ fontSize: 24 }}> cm</span></>) : "Tap to enter"}
+            </h1>
           </button>
         </GlassPanel>
-        <GlassPanel className={field === "weight" ? "sel" : ""}>
-          <button className="field-btn" onClick={() => setField("weight")}>
-            <p>Weight</p>
-            <h1>{weight || "—"}<span style={{ fontSize: 24 }}> kg</span></h1>
+        <GlassPanel className={`measurement-field ${field === "weight" ? "sel" : ""}`}>
+          <button
+            className="field-btn"
+            onClick={() => setField("weight")}
+            aria-pressed={field === "weight"}
+          >
+            <p className="field-label">
+              Weight{field === "weight" && <span className="field-editing">editing</span>}
+            </p>
+            <h1 className={weight ? "" : "field-value-empty"}>
+              {weight ? (<>{weight}<span style={{ fontSize: 24 }}> kg</span></>) : "Tap to enter"}
+            </h1>
           </button>
         </GlassPanel>
       </div>

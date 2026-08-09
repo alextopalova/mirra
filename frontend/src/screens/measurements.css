@@ -1,3 +1,46 @@
 .field-btn { display: block; width: 100%; min-height: var(--touch); cursor: pointer;
   background: none; border: none; padding: 0; text-align: inherit; font: inherit; color: inherit; }
-.glass-panel.sel { border-color: var(--accent); background: var(--glass-bg-strong); }
+
+.measurements-hint { margin-top: -12px; }
+
+.measurements-fields { display: flex; gap: 24px; width: 100%; max-width: 640px; }
+
+.measurement-field { flex: 1; min-width: 0;
+  transition: opacity 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease; }
+
+/* De-emphasise the field that isn't currently being edited so the selected
+   one is unmistakable at a glance. */
+.measurement-field:not(.sel) { opacity: 0.55; }
+
+/* Selected field: bright accent border + glow ring, on top of the existing
+   background swap, so it reads as "this is what the keypad is editing". */
+.glass-panel.sel {
+  border-color: var(--accent);
+  background: var(--glass-bg-strong);
+  box-shadow: var(--glass-shadow), 0 0 0 3px var(--accent), 0 0 28px 4px var(--accent);
+  opacity: 1;
+}
+
+.field-label { display: flex; align-items: baseline; justify-content: center; gap: 8px; }
+.sel .field-label { color: var(--accent); font-weight: 600; }
+.field-editing { font-size: 14px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--accent); }
+
+.field-value-empty { color: var(--text-dim); font-size: 26px; font-weight: 500; }
+
+/* Short-viewport phones in Safari (e.g. 375x667, 390x844 with browser chrome
+   visible): tighten vertical rhythm so both field panels, the keypad, and the
+   confirm button fit without relying solely on .screen's overflow-y scroll.
+   Touch targets stay at the --touch minimum throughout. */
+@media (max-height: 700px) {
+  .screen-measurements { padding: 24px; gap: 16px; }
+  .screen-measurements h2 { font-size: 26px; }
+  .measurements-hint { font-size: 18px; margin-top: -4px; }
+  .measurement-field.glass-panel { padding: 16px; }
+  .measurement-field h1 { font-size: 38px; }
+}
+
+@media (max-width: 380px) {
+  .measurements-fields { gap: 12px; }
+  .measurement-field.glass-panel { padding: 18px; }
+}
