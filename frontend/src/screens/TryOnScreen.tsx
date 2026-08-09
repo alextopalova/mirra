@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useSession } from "../state/session";
-import { tryOn } from "../api/client";
+import { tryOn, ApiError } from "../api/client";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { Spinner } from "../components/Spinner";
 import { ErrorState } from "../components/ErrorState";
 import "./tryon.css";
 import "./screen.css";
+
+const GENERIC_ERROR = "We couldn't render your try-on.";
 
 export function TryOnScreen() {
   const { data, go, reset } = useSession();
@@ -22,9 +24,9 @@ export function TryOnScreen() {
         if (cancelled) return;
         setImg(r.image);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return;
-        setError("We couldn't render your try-on.");
+        setError(err instanceof ApiError && err.detail ? err.detail : GENERIC_ERROR);
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- rerun on selectedId or explicit retry, not on every data/go/reset identity change

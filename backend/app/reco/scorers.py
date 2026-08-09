@@ -85,7 +85,11 @@ def body_score(g: Garment, profile: BodyProfile) -> tuple[float, list[str]]:
     reasons: list[str] = []
     score = 0.4
     silhouette = g.silhouette
-    rule = _JP_RULES[profile.japanese]
+    # `profile` is deserialized straight from the /recommend request body, so
+    # `profile.japanese` is not guaranteed to be one of the three keys this
+    # dict knows about (a client could send anything). Fall back to
+    # "straight" rather than raising KeyError on an unrecognised value.
+    rule = _JP_RULES.get(profile.japanese, _JP_RULES["straight"])
 
     if silhouette.get("structured") == rule["structured"]:
         score += 0.25

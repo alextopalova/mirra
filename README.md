@@ -67,7 +67,7 @@ an impossible measurement rather than returning a confidently wrong diagnosis.
 
 ```
 backend/          FastAPI (Python 3.12)
-  app/cv/         measurement + dual classifier   ← the hero, 100% unit-tested
+  app/cv/         measurement + dual classifier   ← the hero, thoroughly unit-tested (incl. the pure band-width math)
   app/reco/       catalogue, scorers, ranking engine
   app/youcam/     YouCam API client, VTO, colour   (CONTRACT.md = live-verified API contract)
   app/routers/    /analyze-body, /recommend, /try-on
@@ -100,7 +100,7 @@ Mocks are **on by default** so development doesn't burn API credits.
 
 **Tests**
 ```bash
-cd backend && . .venv/bin/activate && pytest -q     # 160 tests
+cd backend && . .venv/bin/activate && pytest -q     # 162 tests
 ```
 
 ## Design notes

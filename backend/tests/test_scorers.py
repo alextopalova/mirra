@@ -49,6 +49,16 @@ def test_occasion_score_matches_tag():
     assert occasion_score(_g(occasion_tags=["work"]), "date night") < 1.0
 
 
+def test_body_score_falls_back_safely_for_unknown_japanese_value():
+    # `profile.japanese` is a plain str deserialised straight from the
+    # /recommend request body -- a client can send anything. This must not
+    # KeyError; it should behave like the "straight" fallback rule instead.
+    profile = _profile(japanese="banana")
+    score, reasons = body_score(_g(), profile)
+    assert 0.0 <= score <= 1.0
+    assert len(reasons) >= 1
+
+
 # --- color_score: robustness (clamping, empty palette, closest-match) ---
 
 def test_color_score_identical_color_is_exactly_one():
