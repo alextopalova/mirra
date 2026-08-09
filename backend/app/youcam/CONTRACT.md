@@ -54,7 +54,7 @@ Accepted parameters (exact names, from the API's own 400 error):
 
 - Person image: `src_file_id` (uploaded) **or** `src_file_url` (public URL).
 - Garment: `ref_file_url` (**singular** — `ref_file_urls` plural is REJECTED) or `ref_file_id`.
-- `garment_category`: **required**. `"upper_body"` verified working. (`full_body`, `lower_body` presumed valid.)
+- `garment_category`: **required**. **VERIFIED live — the accepted values are exactly `upper_body`, `lower_body`, `full_body`.** Anything else (e.g. `dresses`, `bogus_value`) returns `400 "garment_category is not one of the accepted values."` Catalog mapping: `top` → `upper_body`, `pants` → `lower_body`, `dress` → `full_body`.
 
 Verified working request:
 ```json
