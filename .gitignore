@@ -10,3 +10,4 @@ __pycache__/
 *.egg-info/
 .idea/
 backend/models/*.task
+backend/models/*.tflite
