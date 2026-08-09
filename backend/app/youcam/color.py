@@ -20,19 +20,22 @@ Per app/youcam/CONTRACT.md (verified live against the real API):
 Graceful degradation is mandatory here: colour analysis is a bonus signal
 on top of the body scan, not a required one. `analyze_color` catches every
 failure mode below (no face to crop, a YouCam task error such as
-`error_face_not_forward_facing`, a timeout, an auth/config problem, or a
-result payload we don't recognise) and falls back to `_DEFAULT_PALETTE`
-rather than raising -- a failed colour read must never break the
-shopper's scan. Each fallback is logged as a warning so real failures are
-visible in the logs without surfacing as an error to the shopper.
+`error_face_not_forward_facing`, a timeout, an auth/config problem, a raw
+HTTP error such as an expired key (401) or a rate limit (429), or a result
+payload we don't recognise) and falls back to `_DEFAULT_PALETTE` rather
+than raising -- a failed colour read must never break the shopper's scan.
+Each fallback is logged as a warning so real failures are visible in the
+logs without surfacing as an error to the shopper (and without ever
+logging or returning the API key).
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Optional, Sequence
 
 import cv2
+import httpx
 import numpy as np
 
 from app.cv.measure import (
@@ -46,6 +49,17 @@ from app.cv.measure import (
 from app.youcam.client import YouCamClient, YouCamError
 
 logger = logging.getLogger(__name__)
+
+# client.py's poll() defaults (60 tries x 2.5s ~= 150s) are shared across
+# every YouCam task and are too loose here: colour analysis is a bonus
+# signal that already degrades gracefully to a default palette, so a
+# shopper shouldn't be stuck on "analyzing..." for up to 2.5 minutes before
+# that fallback kicks in. Tighten just this call site to a ~50s ceiling --
+# short enough to fail fast on a kiosk, generous enough for a normally-quick
+# skin-tone-analysis run. Mirrors the same tightening `vto.py` does for the
+# `cloth` task; do NOT change client.py's shared defaults.
+_POLL_INTERVAL_SECONDS = 2.5
+_POLL_MAX_TRIES = 20  # 2.5s * 20 = 50s ceiling
 
 # The four classic personal-colour "seasons" and their palettes. Kept in one
 # obvious place so they're easy to tune later (e.g. swap in
@@ -124,8 +138,17 @@ def crop_face_region(
     return bgr[y0:y1, x0:x1]
 
 
-def _crop_face(front_bgr: np.ndarray) -> np.ndarray:
+def _crop_face(
+    front_bgr: np.ndarray, landmarks: Optional[Sequence[Landmark]] = None
+) -> np.ndarray:
     """Locate and crop the head region from a full-body front photo.
+
+    `measure_from_images` (app/cv/measure.py) already runs the
+    PoseLandmarker once per request to get body-measurement landmarks; re-
+    running it here for the same image would be a duplicate, wasted
+    MediaPipe inference. Callers that already have landmarks for this exact
+    image should pass them via `landmarks` to skip that; when omitted, we
+    extract them ourselves (unchanged behaviour for existing callers/tests).
 
     Raises ValueError (never anything else) when a face region can't be
     determined, so `analyze_color` has a single exception type to catch
@@ -133,7 +156,8 @@ def _crop_face(front_bgr: np.ndarray) -> np.ndarray:
     (`extract_landmarks`), or landmarks present but not confidently
     locating a head (`crop_face_region`).
     """
-    landmarks = extract_landmarks(front_bgr)
+    if landmarks is None:
+        landmarks = extract_landmarks(front_bgr)
     return crop_face_region(front_bgr, landmarks[NOSE], landmarks[L_SHOULDER], landmarks[R_SHOULDER])
 
 
@@ -259,18 +283,26 @@ def _palette_from_result(payload: dict) -> Optional[dict]:
 # ---------------------------------------------------------------------------
 
 
-async def analyze_color(front_bgr: np.ndarray) -> dict:
+async def analyze_color(
+    front_bgr: np.ndarray, landmarks: Optional[Sequence[Landmark]] = None
+) -> dict:
     """Derive a personal-colour palette from a shopper's front photo.
 
     Crops a face region, runs the YouCam `skin-tone-analysis` task on it,
     and derives a season + palette from the result. Never raises: every
-    failure mode (no face to crop, a YouCam task/timeout/auth error, or an
-    unrecognised result payload) is caught and logged as a warning, and
-    `_DEFAULT_PALETTE` is returned instead -- a failed colour read must
-    never break the shopper's body scan. See module docstring.
+    failure mode (no face to crop, a YouCam task/timeout/auth error, a raw
+    HTTP error, or an unrecognised result payload) is caught and logged as
+    a warning, and `_DEFAULT_PALETTE` is returned instead -- a failed
+    colour read must never break the shopper's body scan. See module
+    docstring.
+
+    `landmarks`: pose landmarks for `front_bgr` already computed by the
+    caller (e.g. the route, which needs them for body measurement too) --
+    pass them through to skip a duplicate PoseLandmarker inference. See
+    `_crop_face`.
     """
     try:
-        face_bgr = _crop_face(front_bgr)
+        face_bgr = _crop_face(front_bgr, landmarks=landmarks)
     except ValueError as e:
         logger.warning(
             "Could not locate a face region for colour analysis (%s); "
@@ -289,13 +321,24 @@ async def analyze_color(front_bgr: np.ndarray) -> dict:
         async with YouCamClient() as api_client:
             file_id = await api_client.upload("skin-tone-analysis", face_bytes)
             task_id = await api_client.run("skin-tone-analysis", {"src_file_id": file_id})
-            result = await api_client.poll("skin-tone-analysis", task_id)
-    except YouCamError as e:
+            result = await api_client.poll(
+                "skin-tone-analysis",
+                task_id,
+                interval=_POLL_INTERVAL_SECONDS,
+                max_tries=_POLL_MAX_TRIES,
+            )
+    except (YouCamError, httpx.HTTPError) as e:
         # Covers YouCamAuthError (no/invalid API key), YouCamTaskError (e.g.
         # error_face_not_forward_facing), YouCamTimeoutError, and
-        # YouCamResponseError (unexpected upload/run response shape) alike
-        # -- all are "colour analysis didn't work this time", never a
-        # reason to fail the shopper's scan.
+        # YouCamResponseError (unexpected upload/run response shape) from
+        # our own client code, *and* httpx.HTTPStatusError/HTTPError raised
+        # directly by `upload()`/`run()`/`poll()`'s unwrapped
+        # `resp.raise_for_status()` calls (e.g. an expired key -> 401, a
+        # rate limit -> 429, or a failed S3 PUT) -- all are "colour
+        # analysis didn't work this time", never a reason to fail the
+        # shopper's scan. `%s` on an httpx error is safe: it renders as
+        # "<status> for url '<url>'", never the Authorization header/API
+        # key.
         logger.warning(
             "YouCam skin-tone-analysis failed (%s); falling back to the default palette.", e
         )

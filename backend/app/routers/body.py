@@ -44,7 +44,7 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.cv.classify import classify
-from app.cv.measure import measure_from_images
+from app.cv.measure import extract_landmarks, measure_from_images
 from app.youcam.color import analyze_color
 
 logger = logging.getLogger(__name__)
@@ -133,8 +133,24 @@ async def analyze_body(inp: AnalyzeIn):
     if settings.use_mocks:
         palette = _PLACEHOLDER_PALETTE
     else:
+        # `measure_from_images` above already ran PoseLandmarker on `front`
+        # once (internally, via app.cv.measure -- not something we can
+        # intercept without changing that module). Re-extracting landmarks
+        # here and handing them to `analyze_color` at least spares *it*
+        # from running PoseLandmarker a second time itself (it used to,
+        # via analyze_color -> _crop_face -> extract_landmarks). Since
+        # `measure_from_images` just succeeded on this same image, this
+        # extraction is expected to succeed too; the try/except is a pure
+        # safety net -- on the (unexpected) chance it doesn't, fall back to
+        # landmarks=None so analyze_color extracts them itself, exactly as
+        # it always has.
         try:
-            palette = await analyze_color(front)
+            front_landmarks = extract_landmarks(front)
+        except ValueError:
+            front_landmarks = None
+
+        try:
+            palette = await analyze_color(front, landmarks=front_landmarks)
         except Exception:
             # Belt-and-suspenders: analyze_color already catches its own
             # failure modes (see its docstring), but a colour-analysis bug

@@ -5,12 +5,14 @@ No live network calls: YouCamClient is monkeypatched to a client built on
 httpx.MockTransport, same pattern as tests/test_tryon_route.py.
 """
 
+import logging
+
 import httpx
 import numpy as np
 import pytest
 
 from app.config import settings
-from app.cv.measure import Landmark
+from app.cv.measure import L_SHOULDER, NOSE, R_SHOULDER, Landmark
 from app.youcam import color as color_mod
 from app.youcam.client import YouCamClient
 from app.youcam.color import (
@@ -314,3 +316,158 @@ async def test_analyze_color_falls_back_when_api_key_missing(monkeypatch):
     result = await analyze_color(_face_bgr())
 
     assert result == _DEFAULT_PALETTE
+
+
+# ---------------------------------------------------------------------------
+# Finding 1: raw httpx.HTTPStatusError from client.py's unwrapped
+# resp.raise_for_status() (401 auth failure, 429 rate limit) must be caught
+# here too, not just YouCamError -- analyze_color must genuinely never raise.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_analyze_color_falls_back_on_401_without_raising(monkeypatch, caplog):
+    def handler(request: httpx.Request) -> httpx.Response:
+        # An expired/invalid key -> 401 straight from the upload
+        # file-creation call, before client.py wraps anything in a
+        # YouCamError -- this is the exact gap Finding 1 describes.
+        return httpx.Response(401, json={"error": "unauthorized"})
+
+    monkeypatch.setattr(color_mod, "YouCamClient", _mock_transport_client_factory(handler))
+    monkeypatch.setattr(color_mod, "crop_face_region", lambda *a, **k: _face_bgr())
+    monkeypatch.setattr(color_mod, "extract_landmarks", lambda bgr: [None] * 33)
+
+    with caplog.at_level(logging.WARNING):
+        result = await analyze_color(_face_bgr())  # must not raise
+
+    assert result == _DEFAULT_PALETTE
+    # No secret in the return value or in anything logged along the way.
+    assert "sk-test-key" not in repr(result)
+    assert "sk-test-key" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_analyze_color_falls_back_on_429_without_raising(monkeypatch, caplog):
+    def handler(request: httpx.Request) -> httpx.Response:
+        # A rate limit, hit on the run (task-start) call this time, to
+        # cover a different call site than the 401 test above.
+        if request.method == "POST" and request.url.path == "/s2s/v2.0/file/skin-tone-analysis":
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "files": [
+                            {
+                                "file_id": "f1",
+                                "requests": [{"method": "PUT", "url": "https://s3.example.com/put", "headers": {}}],
+                            }
+                        ]
+                    }
+                },
+            )
+        if request.method == "PUT":
+            return httpx.Response(200)
+        return httpx.Response(429, json={"error": "rate_limited"})
+
+    monkeypatch.setattr(color_mod, "YouCamClient", _mock_transport_client_factory(handler))
+    monkeypatch.setattr(color_mod, "crop_face_region", lambda *a, **k: _face_bgr())
+    monkeypatch.setattr(color_mod, "extract_landmarks", lambda bgr: [None] * 33)
+
+    with caplog.at_level(logging.WARNING):
+        result = await analyze_color(_face_bgr())  # must not raise
+
+    assert result == _DEFAULT_PALETTE
+    assert "sk-test-key" not in repr(result)
+    assert "sk-test-key" not in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Finding 2: reuse landmarks already computed by the caller instead of
+# re-running PoseLandmarker for the same image.
+# ---------------------------------------------------------------------------
+
+def _synthetic_face_landmarks():
+    """A 33-element landmark list with just NOSE/L_SHOULDER/R_SHOULDER
+    populated realistically (the only ones `_crop_face` reads); good enough
+    to exercise `crop_face_region` without raising."""
+    lms = [_landmark(0, 0)] * 33
+    lms[NOSE] = _landmark(200, 150)
+    lms[L_SHOULDER] = _landmark(150, 300)
+    lms[R_SHOULDER] = _landmark(250, 300)
+    return lms
+
+
+def test_crop_face_skips_extraction_when_landmarks_supplied(monkeypatch):
+    def _boom(bgr):
+        raise AssertionError("extract_landmarks must not be called when landmarks are already supplied")
+
+    monkeypatch.setattr(color_mod, "extract_landmarks", _boom)
+
+    crop = color_mod._crop_face(_face_bgr(), landmarks=_synthetic_face_landmarks())
+
+    assert crop.size > 0
+
+
+def test_crop_face_still_extracts_when_landmarks_omitted(monkeypatch):
+    # Unchanged default behaviour: existing callers that don't pass
+    # landmarks still get them extracted internally.
+    calls = []
+
+    def _spy(bgr):
+        calls.append(bgr)
+        return _synthetic_face_landmarks()
+
+    monkeypatch.setattr(color_mod, "extract_landmarks", _spy)
+
+    crop = color_mod._crop_face(_face_bgr())
+
+    assert len(calls) == 1
+    assert crop.size > 0
+
+
+@pytest.mark.asyncio
+async def test_analyze_color_with_supplied_landmarks_skips_reextraction(monkeypatch):
+    handler = _full_flow_handler({"results": {"undertone": "cool", "depth": "light"}})
+    monkeypatch.setattr(color_mod, "YouCamClient", _mock_transport_client_factory(handler))
+
+    def _boom(bgr):
+        raise AssertionError("extract_landmarks must not be called when landmarks are supplied")
+
+    monkeypatch.setattr(color_mod, "extract_landmarks", _boom)
+
+    result = await analyze_color(_face_bgr(), landmarks=_synthetic_face_landmarks())
+
+    assert result == {"season": "Summer", "colors": _SEASON_PALETTES["Summer"]}
+
+
+# ---------------------------------------------------------------------------
+# Finding 3: skin-tone-analysis polls with a tighter ceiling than client.py's
+# shared ~150s default.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_analyze_color_uses_tightened_poll_ceiling(monkeypatch):
+    captured = {}
+    handler = _full_flow_handler({"results": {"undertone": "warm", "depth": "deep"}})
+
+    _original_poll = YouCamClient.poll
+
+    async def _spy_poll(self, task, task_id, interval=2.5, max_tries=60):
+        captured["interval"] = interval
+        captured["max_tries"] = max_tries
+        return await _original_poll(self, task, task_id, interval=interval, max_tries=max_tries)
+
+    monkeypatch.setattr(color_mod, "YouCamClient", _mock_transport_client_factory(handler))
+    monkeypatch.setattr(YouCamClient, "poll", _spy_poll)
+    monkeypatch.setattr(color_mod, "crop_face_region", lambda *a, **k: _face_bgr())
+    monkeypatch.setattr(color_mod, "extract_landmarks", lambda bgr: [None] * 33)
+
+    result = await analyze_color(_face_bgr())
+
+    assert captured["interval"] == color_mod._POLL_INTERVAL_SECONDS
+    assert captured["max_tries"] == color_mod._POLL_MAX_TRIES
+    # The whole point: meaningfully tighter than client.py's shared ~150s
+    # default (60 tries x 2.5s), and comfortably inside the 45-60s window
+    # the finding asks for.
+    ceiling = color_mod._POLL_INTERVAL_SECONDS * color_mod._POLL_MAX_TRIES
+    assert 45 <= ceiling <= 60
+    assert result == {"season": "Autumn", "colors": _SEASON_PALETTES["Autumn"]}
