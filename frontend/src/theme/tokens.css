@@ -1,15 +1,23 @@
 :root {
-  --bg-gradient: radial-gradient(120% 120% at 30% 15%, #2A3B52 0%, #16202F 55%, #0B111C 100%);
-  --glass-bg: rgba(255, 255, 255, 0.08);
-  --glass-bg-strong: rgba(255, 255, 255, 0.14);
-  --glass-border: rgba(255, 255, 255, 0.18);
+  /* Light, greyish-white boutique ground: a quiet cool-grey radial wash,
+     not flat white. Top-left is brightest (near paper white), settling
+     into a soft slate-grey at the edges. */
+  --bg-gradient: radial-gradient(120% 120% at 30% 15%, #FAFBFC 0%, #ECEFF3 55%, #DCE1E8 100%);
+  /* Glass on a light ground needs more opacity than glass on a dark one
+     (translucent white nearly disappears against a light page), plus a
+     visible cool-grey edge and a tight, close shadow to keep panels
+     legible and layered instead of washing out. */
+  --glass-bg: rgba(255, 255, 255, 0.60);
+  --glass-bg-strong: rgba(255, 255, 255, 0.80);
+  --glass-border: rgba(100, 116, 139, 0.30);
   --glass-blur: 24px;
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
-  --accent: #5B9DFF;
-  --accent-strong: #3B7EF0;
-  --danger: #FF6B6B;
-  --text: #FFFFFF;
-  --text-dim: rgba(255, 255, 255, 0.70);
+  --glass-shadow: 0 8px 28px rgba(30, 41, 59, 0.12), 0 1px 2px rgba(30, 41, 59, 0.06);
+  --accent: #8FB4D9;
+  --accent-strong: #6B96C2;
+  --success: #2E7D4F;
+  --danger: #B3261E;
+  --text: #1E2530;
+  --text-dim: #4A5261;
   --radius: 28px;
   --touch: 72px;
   --pad: 32px;

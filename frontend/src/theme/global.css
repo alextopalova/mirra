@@ -16,6 +16,10 @@ html {
   /* Kiosk chrome: the app is the whole viewport, never a scrollable page. */
   overflow: hidden;
   overscroll-behavior: none;
+  /* Light theme: tells the UA to render native widgets (scrollbars, form
+     controls, selection) with light-appropriate colors instead of
+     inheriting a dark OS preference. */
+  color-scheme: light;
 }
 body {
   font-family: var(--font);
