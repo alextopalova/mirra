@@ -16,6 +16,12 @@ export type GuideState = "idle" | "searching" | "adjust" | "fit";
  * (dim while searching, brighter while adjusting, accent + glow once the shopper
  * fits the guide).
  */
+// Intrinsic aspect ratio of the artwork, read from its own viewBox rather
+// than hardcoded here — so the CSS sizing below (which locks the guide's
+// height and derives its width from this ratio) can never drift out of sync
+// with `poseGuidePaths.ts` if that viewBox is ever changed.
+const [, , GUIDE_VB_WIDTH, GUIDE_VB_HEIGHT] = GUIDE_VIEWBOX.split(" ").map(Number);
+
 export function PoseGuide({
   variant,
   state = "idle",
@@ -30,6 +36,7 @@ export function PoseGuide({
       className={`pose-guide pose-guide--${state}`}
       viewBox={GUIDE_VIEWBOX}
       preserveAspectRatio="xMidYMid meet"
+      style={{ aspectRatio: `${GUIDE_VB_WIDTH} / ${GUIDE_VB_HEIGHT}` }}
       aria-hidden="true"
     >
       {paths.map((d, i) => (

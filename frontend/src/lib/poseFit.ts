@@ -39,8 +39,35 @@ const VISIBILITY_MIN = 0.5;
  * Target bounding box for the body (shoulders/hips/ankles), expressed as a
  * fraction of the video frame (0..1). Matches the fraction of the frame the
  * PoseGuide anatomical silhouette occupies, with margin for tolerance.
+ *
+ * Derived from PoseGuide's rendering geometry (see PoseGuide.css), which
+ * locks the guide's height to 96% of the frame — a 2% inset top and
+ * bottom — with its width centred and derived from GUIDE_VIEWBOX's
+ * (771 x 1060) aspect ratio:
+ *
+ *   frameFraction(viewBoxYFraction) = 0.02 + viewBoxYFraction * 0.96
+ *
+ * The previous box's numbers (yMin 0.22 / yMax 0.90) were themselves
+ * already a fraction-of-viewBox estimate of where the shoulders and ankles
+ * fall on the silhouette (roughly 22% and 90% of the way down the artwork).
+ * Running those same fractions through the transform above keeps the
+ * *anatomical* target unchanged while re-expressing it in the new,
+ * height-locked frame coordinates:
+ *
+ *   yMin = 0.02 + 0.22 * 0.96 = 0.231  ->  0.23
+ *   yMax = 0.02 + 0.90 * 0.96 = 0.884  ->  0.88
+ *
+ * That vertical mapping — and therefore yMin/yMax below — holds across
+ * every container aspect ratio: the guide's height is always exactly 96%
+ * of the frame, regardless of width (only its *width*, and therefore how
+ * much of it may be clipped at the sides, varies with aspect — see
+ * PoseGuide.css). xMin/xMax are only used via their midpoint (0.5) in
+ * evaluateFit below, which is also aspect-invariant by construction (the
+ * guide is always horizontally centred); the concrete 0.28/0.72 values are
+ * a same-derivation estimate of the shoulder span at a representative
+ * (non-clipped) aspect ratio, kept only for documentation/margin purposes.
  */
-export const GUIDE_BOX = { xMin: 0.30, xMax: 0.70, yMin: 0.22, yMax: 0.90 };
+export const GUIDE_BOX = { xMin: 0.28, xMax: 0.72, yMin: 0.23, yMax: 0.88 };
 
 const SIZE_TOLERANCE = 0.20; // fraction of guide height allowed too small/large
 const CENTER_TOLERANCE = 0.09; // fraction of frame width allowed off-center

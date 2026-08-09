@@ -45,6 +45,13 @@
   max-width: 100%;
   max-height: 100%;
   aspect-ratio: var(--capture-aspect, 3 / 4);
+  /* PoseGuide is now height-locked to this box (see PoseGuide.css) and can
+     overflow it horizontally on a container narrower than the guide
+     artwork's own aspect ratio. Clip that overflow here, at the video's own
+     edges, rather than letting it bleed into `.capture-stage`'s surrounding
+     letterbox bars — the guide must never appear to extend past the video
+     it's overlaid on. */
+  overflow: hidden;
 }
 .capture-video-area video {
   display: block;

@@ -4,11 +4,44 @@
    or a dim room. So the guide uses its own fixed high-contrast treatment — a
    light outline plus a dark shadow — which reads on any video frame, in either
    theme. The "fit" state still uses the accent token so it matches the product. */
+/* Sized to fill the preview's HEIGHT rather than "fit entirely inside it"
+   (which is what inset:0 + width/height 100% + preserveAspectRatio=meet
+   used to do): the artwork is portrait (viewBox ~0.727 w/h), so on a
+   container narrower than that — a 9:16 phone camera being the extreme
+   case — `meet` was width-limited and only reached ~77% of the container's
+   height, leaving dead space above and below and forcing shoppers to stand
+   further back than necessary.
+
+   Instead the guide's own box is explicitly height-locked to the container
+   (96% top-to-bottom, i.e. a small 2%-per-edge inset — see below), with its
+   width derived from the artwork's intrinsic aspect ratio (set inline in
+   PoseGuide.tsx from GUIDE_VIEWBOX, so it can't drift out of sync) and
+   centred horizontally. `preserveAspectRatio="xMidYMid meet"` on the SVG
+   itself becomes a no-op once the box already matches the artwork's aspect
+   — it's kept only as a safety net, never doing any scaling of its own.
+
+   The 96%-height (not 100%) is deliberate breathing room: the artwork
+   already has ~3% of empty headroom above the head baked into the source
+   paths, but none below the feet (they sit flush on the viewBox's bottom
+   edge) — so filling 100% would plant the feet exactly on the video's
+   bottom edge, reading as cropped. A small margin, split top and bottom,
+   keeps both ends clear of the frame edge.
+
+   On a container narrower than the artwork's aspect ratio (again, the 9:16
+   case), the height-locked box becomes wider than the container and
+   overflows sideways — clipped by `.capture-video-area`'s overflow:hidden
+   (capture.css). That clips empty margin around the figure, not the figure
+   itself: the outstretched-arm silhouette occupies the middle ~64% of the
+   artwork's width, well inside the ~80% that remains visible even at 9:16.
+   Head and feet are never at risk since this box never affects vertical
+   sizing — only GUIDE_VIEWBOX's own top/bottom padding does, handled above. */
 .pose-guide {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 2%;
+  left: 50%;
+  height: 96%;
+  width: auto;
+  transform: translateX(-50%);
   pointer-events: none;
 
   /* Scoped to this overlay only — deliberately not theme tokens (see above). */
