@@ -3,7 +3,15 @@ import itertools
 import pytest
 
 from app.reco.catalog import Garment
-from app.reco.scorers import body_score, color_score, occasion_score
+from app.reco.scorers import (
+    SEASON_MATCH,
+    SEASON_NEUTRAL,
+    SEASON_OFF_SEASON_PENALTY,
+    body_score,
+    color_score,
+    occasion_score,
+    season_score,
+)
 from app.schemas import BodyProfile
 
 
@@ -170,6 +178,50 @@ def test_reasons_are_never_empty_for_pants_fallback_either():
     for japanese, fruit in itertools.product(_JAPANESE_TYPES, _FRUITS):
         _, reasons = body_score(pants, _profile(japanese=japanese, fruit=fruit))
         assert len(reasons) >= 1
+
+
+# --- season_score: the bug fix (season_tags were never scored) ---------
+
+
+def test_season_score_matches_is_full_score():
+    assert season_score(_g(season_tags=["autumn"]), "Autumn") == SEASON_MATCH
+
+
+def test_season_score_matches_case_insensitively():
+    assert season_score(_g(season_tags=["Autumn"]), "autumn") == SEASON_MATCH
+    assert season_score(_g(season_tags=["autumn"]), "AUTUMN") == SEASON_MATCH
+
+
+def test_season_score_mismatch_is_a_soft_penalty_not_zero():
+    s = season_score(_g(season_tags=["winter"]), "Autumn")
+    assert s == SEASON_OFF_SEASON_PENALTY
+    assert 0.0 < s < SEASON_NEUTRAL, "off-season must be discouraged, not disqualifying"
+
+
+def test_season_score_any_tag_match_counts_as_in_season():
+    # A garment can legitimately belong to more than one season -- only one
+    # of its tags needs to match the shopper's season.
+    assert season_score(_g(season_tags=["winter", "autumn"]), "Autumn") == SEASON_MATCH
+
+
+def test_season_score_no_season_given_is_neutral_not_punitive():
+    # The kiosk's colour analysis can fail and fall back to no/default
+    # season -- that must not tank every garment's score.
+    assert season_score(_g(season_tags=["winter"]), None) == SEASON_NEUTRAL
+    assert season_score(_g(season_tags=["winter"]), "") == SEASON_NEUTRAL
+
+
+def test_season_score_no_season_tags_on_garment_is_neutral():
+    # An untagged/cross-season garment (e.g. a neutral basic) shouldn't be
+    # penalised just because it carries no season_tags at all.
+    assert season_score(_g(season_tags=[]), "Autumn") == SEASON_NEUTRAL
+
+
+def test_season_score_always_within_unit_interval():
+    for tags in ([], ["autumn"], ["winter"], ["spring", "summer"]):
+        for season in (None, "", "Autumn", "Winter", "banana"):
+            s = season_score(_g(season_tags=tags), season)
+            assert 0.0 <= s <= 1.0
 
 
 def test_reasons_read_as_short_user_facing_copy():

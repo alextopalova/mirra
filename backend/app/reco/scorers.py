@@ -123,3 +123,40 @@ def body_score(g: Garment, profile: BodyProfile) -> tuple[float, list[str]]:
 def occasion_score(g: Garment, occasion: str) -> float:
     """1.0 for an exact occasion-tag match, 0.6 otherwise (still wearable)."""
     return 1.0 if occasion in g.occasion_tags else 0.6
+
+
+# season_score outcomes. Exposed so `engine.rank()` can tell an explicit
+# off-season penalty apart from "we had no season signal" without
+# re-deriving the match logic itself.
+SEASON_MATCH = 1.0
+SEASON_NEUTRAL = 0.5  # mirrors color_score's "nothing to compare" neutral
+SEASON_OFF_SEASON_PENALTY = 0.15
+
+
+def season_score(g: Garment, season: str | None) -> float:
+    """How well a garment's season fits the shopper's seasonal palette.
+
+    A shopper's colour "season" (Autumn/Winter/Spring/Summer) is a proxy
+    for which garments were designed to sit near their skin-tone palette --
+    `color_score` alone can't tell a genuine palette match from a raw
+    CIELab coincidence (a winter garment can happen to sit near an autumn
+    palette color). This term makes the seasonal tag itself count.
+
+    - Any overlap between `g.season_tags` and `season` (case-insensitive)
+      is a full match -- a garment can legitimately belong to more than
+      one season.
+    - Returns SEASON_NEUTRAL (not a penalty) when there's nothing to
+      compare: no `season` given, or the garment carries no season tags
+      at all (an untagged/cross-season piece). A kiosk whose colour
+      analysis failed and fell back to a default season, or a neutral
+      item that genuinely suits any palette, must not be punished for it.
+    - Otherwise it's a soft, decisive penalty (SEASON_OFF_SEASON_PENALTY)
+      rather than a hard filter/zero: a 15-garment rack must never go
+      empty, and some pieces (dark neutrals, blacks, greys) can still be
+      the best available option outside their "main" season.
+    """
+    if not season or not g.season_tags:
+        return SEASON_NEUTRAL
+    target = season.strip().lower()
+    tags = {t.strip().lower() for t in g.season_tags}
+    return SEASON_MATCH if target in tags else SEASON_OFF_SEASON_PENALTY
