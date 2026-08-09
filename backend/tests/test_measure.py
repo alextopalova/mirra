@@ -10,6 +10,7 @@ from app.cv.measure import (
     VISIBILITY_THRESHOLD,
     _measure_silhouette_widths,
     _resolve_person_label,
+    _row_contiguous_width,
     measure_from_images,
     measurements_from_landmarks,
 )
@@ -165,6 +166,16 @@ def test_raises_when_waist_wider_than_hip():
         measurements_from_landmarks(_front_landmarks(), bad_widths)
 
 
+def test_raises_when_waist_equals_hip():
+    # Spec requires waist >= hip to raise, not just strict waist > hip: a
+    # waist exactly as wide as the hips is still anatomically implausible
+    # (real waists are narrower) and should be treated as a bad
+    # measurement, not silently accepted.
+    bad_widths = _widths(shoulder_w=90, bust_w=95, waist_w=100, hip_w=100)
+    with pytest.raises(ValueError, match="waist wider than hips"):
+        measurements_from_landmarks(_front_landmarks(), bad_widths)
+
+
 def test_raises_on_degenerate_zero_width():
     bad_widths = _widths(hip_w=0)
     with pytest.raises(ValueError, match="degenerate"):
@@ -191,6 +202,31 @@ def test_resolve_person_label_raises_when_no_sample_points_in_bounds():
     mask = np.zeros((10, 10), dtype=np.uint8)
     with pytest.raises(ValueError, match="polarity"):
         _resolve_person_label(mask, [(-5, -5), (50, 50)])
+
+
+def test_resolve_person_label_tie_break_favors_lower_label_value():
+    # A 2-2 split among the 4 sample points (e.g. an unusual pose or a mask
+    # straddling an edge) has no true majority. The tie-break is documented
+    # in measure.py as intentional and deterministic: it favors the lower
+    # label value. Pin that here so a refactor (e.g. swapping np.unique for
+    # collections.Counter, whose ordering is insertion-based, not sorted)
+    # doesn't silently change which label wins ties.
+    mask = np.zeros((10, 10), dtype=np.uint8)
+    mask[0, 0] = 10
+    mask[0, 1] = 10
+    mask[0, 2] = 200
+    mask[0, 3] = 200
+    sample_points = [(0, 0), (1, 0), (2, 0), (3, 0)]
+    assert _resolve_person_label(mask, sample_points) == 10
+    # And confirm it's genuinely a tie, not one label just happening to be
+    # first in the list -- swapping which coordinates carry which label
+    # still favors the lower value.
+    mask2 = np.zeros((10, 10), dtype=np.uint8)
+    mask2[0, 0] = 200
+    mask2[0, 1] = 10
+    mask2[0, 2] = 10
+    mask2[0, 3] = 200
+    assert _resolve_person_label(mask2, sample_points) == 10
 
 
 # ---------------------------------------------------------------------------
@@ -231,6 +267,41 @@ def _make_banded_mask(person_label=255, bg_label=0, h=300, w=300, cx=150):
         half = _stepped_width(y) // 2
         mask[y, cx - half : cx + half] = person_label
     return mask
+
+
+def test_row_contiguous_width_excludes_detached_arm_blob():
+    # A row with a torso column centered on cx, PLUS a separate arm/hand
+    # blob a few pixels to the side with a background gap between them --
+    # the shape that a real "hands on hips" or "arm hanging by the side"
+    # photo produces at waist/hip height. This is the case the whole
+    # accuracy fix (contiguous-run-through-centerline, not full row span)
+    # exists to handle; the stepped-rectangle band test elsewhere has no
+    # such appendage and would pass even if this logic regressed to a
+    # naive min/max span.
+    h, w = 20, 100
+    mask = np.zeros((h, w), dtype=np.uint8)
+    label = 255
+    y = 10
+    # Torso: cols 40..59 inclusive (width 20), centered around cx=49.
+    mask[y, 40:60] = label
+    # Background gap: cols 60..74 (untouched, stays 0) -- separates the arm
+    # from the torso.
+    # Arm/hand blob: cols 75..84 inclusive (width 10), same label as torso,
+    # same row -- exactly what a naive min/max span over the row would
+    # (wrongly) fold into "torso" width.
+    mask[y, 75:85] = label
+
+    torso_width = _row_contiguous_width(mask, label, y=y, cx=49)
+    assert torso_width == pytest.approx(20)
+
+    # Sanity-check the test's own premise: a naive full-row bounding span
+    # (leftmost to rightmost label pixel, ignoring the background gap)
+    # WOULD have swallowed the arm blob. If `_row_contiguous_width` ever
+    # regressed to that logic, this assertion is what would catch it.
+    cols_with_label = np.where(mask[y] == label)[0]
+    naive_span = float(cols_with_label.max() - cols_with_label.min() + 1)
+    assert naive_span == pytest.approx(45)
+    assert naive_span != torso_width
 
 
 def test_measure_silhouette_widths_finds_bust_waist_hip_bands():

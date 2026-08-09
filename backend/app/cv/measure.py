@@ -283,6 +283,13 @@ def _resolve_person_label(
             "could not resolve silhouette mask polarity: no landmark sample "
             "points fell inside the image bounds"
         )
+    # Tie-break (e.g. a 2-2 split among the 4 sample points) is intentional
+    # and deterministic, not incidental: np.unique returns `vals` sorted
+    # ascending, and np.argmax returns the *first* index attaining the max
+    # count, so a tie always resolves to the lower label value. We don't
+    # have a principled reason to prefer the lower label on a genuine tie
+    # (it's an arbitrary but stable choice) -- the point is that it's
+    # reproducible rather than order- or hash-dependent.
     vals, counts = np.unique(labels, return_counts=True)
     return int(vals[np.argmax(counts)])
 
@@ -395,7 +402,7 @@ def _validate_widths_sane(widths: SilhouetteWidths) -> None:
             "measurement. Please step back and retake the photo with your "
             "full body in frame and even lighting."
         )
-    if widths.waist_w > widths.hip_w:
+    if widths.waist_w >= widths.hip_w:
         raise ValueError(
             "couldn't read your shape clearly -- measured waist wider than "
             "hips, which isn't physically plausible. Please step back and "
