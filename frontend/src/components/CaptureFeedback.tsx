@@ -26,8 +26,8 @@ export function CaptureFeedback({ kind, exiting }: { kind: CaptureFeedbackKind; 
       ) : (
         <>
           <svg className="capture-feedback-icon capture-feedback-arrow" viewBox="0 0 100 100" aria-hidden="true">
-            <path className="capture-feedback-arc" d="M 19.93,39.06 A 32 32 0 0 1 77.71,34.00" />
-            <polygon className="capture-feedback-arrowhead" points="83.91,45.65 65.63,30.46 81.53,22.00" />
+            <path className="capture-feedback-arc" d="M 66.00,22.29 A 32,32 0 1 1 22.29,34.00" />
+            <polygon className="capture-feedback-arrowhead" points="30.29,20.14 27.08,43.70 11.49,34.70" />
           </svg>
           <p className="capture-feedback-text">Turn to your side</p>
         </>
