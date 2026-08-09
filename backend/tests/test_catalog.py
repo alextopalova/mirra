@@ -99,6 +99,23 @@ def test_load_catalog_missing_file_raises_clear_error():
 
 # --- gap 2: loud validation on malformed entries --------------------------
 
+# --- gap 3: catalog images must be real garment photos, not placeholders --
+
+def test_no_catalog_image_url_points_at_a_placeholder_service():
+    """The VTO endpoint sends `image_url` to YouCam as the garment reference
+    (`ref_file_url`); a placeholder/stock-photo service (picsum.photos,
+    placehold.co, via.placeholder.com, ...) returns an arbitrary image that
+    has nothing to do with the garment, silently producing a nonsense
+    try-on. Assert on the strings only -- no network calls here."""
+    placeholder_markers = ("picsum.photos", "placehold", "via.placeholder")
+    items = load_catalog()
+    for g in items:
+        lowered = g.image_url.lower()
+        assert not any(marker in lowered for marker in placeholder_markers), (
+            f"{g.id} image_url looks like a placeholder: {g.image_url}"
+        )
+
+
 def test_load_catalog_malformed_entry_raises_clear_error(tmp_path):
     bad = [
         {
