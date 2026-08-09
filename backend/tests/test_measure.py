@@ -8,6 +8,8 @@ from app.cv.measure import (
     Landmark,
     SilhouetteWidths,
     VISIBILITY_THRESHOLD,
+    _BAND_SAMPLES,
+    _HIP_BAND_FRAC,
     _measure_silhouette_widths,
     _resolve_person_label,
     _row_contiguous_width,
@@ -304,6 +306,53 @@ def test_row_contiguous_width_excludes_detached_arm_blob():
     assert naive_span != torso_width
 
 
+def test_measure_silhouette_widths_rejects_hand_rejoin_artefact_in_hip_band():
+    # Regression test for the shipped bug: for a subject standing with arms
+    # at their sides (the common kiosk pose), the hands/wrists rejoin the
+    # torso silhouette near the bottom of the hip band, merging into the
+    # same contiguous centerline run and producing a single row far wider
+    # than the true hip width -- the exact mechanism in the bug report
+    # (frac +1.05 spiked to w=327 on the real fixture while frac +1.00 was
+    # still w=271, a 109px single-row collapse either side of it). A raw
+    # max over the band would pick up that one row; the percentile-based
+    # `_band_extreme` should not.
+    h, w = 400, 400
+    label = 255
+    cx = 200
+    mask = np.zeros((h, w), dtype=np.uint8)
+    for y in range(h):
+        half = 50  # true torso/hip half-width everywhere -> width 100
+        mask[y, cx - half : cx + half] = label
+    # Hand/arm reconnection artefact: right at the bottom edge of the hip
+    # band, the hands/wrists merge into the torso's contiguous run for this
+    # one row, tripling the apparent width.
+    shoulder_y, hip_y = 100, 300
+    torso_span = hip_y - shoulder_y
+    artefact_y = round(shoulder_y + _HIP_BAND_FRAC[1] * torso_span)  # bottom of the hip band
+    mask[artefact_y, cx - 150 : cx + 150] = label
+
+    front_lms = _front_landmarks(
+        shoulder_w=100, hip_w=100, torso_len=torso_span, leg_len=90, cx=cx, top_y=60
+    )
+    widths = _measure_silhouette_widths(mask, label, front_lms)
+    # The measured hip width reflects the true torso, not the blob.
+    assert widths.hip_w == pytest.approx(100)
+
+    # Sanity-check the test's own premise: a naive raw-max-over-the-band
+    # approach (what `_band_extreme` did before the percentile fix) WOULD
+    # have picked up the artefact row and returned the inflated width. If
+    # `_band_extreme` ever regressed to plain max/min, this is what would
+    # catch it.
+    y0 = shoulder_y + _HIP_BAND_FRAC[0] * torso_span
+    y1 = shoulder_y + _HIP_BAND_FRAC[1] * torso_span
+    naive_samples = [
+        _row_contiguous_width(mask, label, y, cx) for y in np.linspace(y0, y1, _BAND_SAMPLES)
+    ]
+    naive_max = max(naive_samples)
+    assert naive_max == pytest.approx(300)
+    assert naive_max != widths.hip_w
+
+
 def test_measure_silhouette_widths_finds_bust_waist_hip_bands():
     mask = _make_banded_mask()
     # shoulder_y=50, hip_y=200 (torso_len=150), centerline x=150 throughout.
@@ -335,7 +384,15 @@ def test_measure_from_images_returns_anatomically_sane_result():
     # waist is narrower than the hips. The old landmark-distance approach
     # violated both of these on this exact photo (shoulder/hip=1.73,
     # waist/hip=1.12) and misclassified it as inverted-triangle.
-    assert 0.6 < (m.shoulder_w / m.hip_w) < 1.4
+    #
+    # This range is intentionally tight (not just "wide enough to pass"):
+    # a too-wide hip band used to make the hand/arm silhouette rejoin the
+    # torso and get picked up as "hip" width, inflating hip_w by ~17% and
+    # dragging shoulder/hip down to 0.766 -- comfortably inside a loose
+    # 0.6-1.4 bound, so that bound didn't catch the bug. 0.85-1.20 is
+    # anatomically realistic for a front-view adult body and would have
+    # failed on the inflated 0.766.
+    assert 0.85 < (m.shoulder_w / m.hip_w) < 1.20
     assert m.waist_w < m.hip_w
     assert 20 < m.bmi < 25
     p = classify(m)

@@ -113,8 +113,30 @@ _KEY_LANDMARKS = {
 _SHOULDER_BAND_HALF_FRAC = 0.06
 _BUST_BAND_FRAC = (0.05, 0.50)
 _WAIST_BAND_FRAC = (0.50, 1.00)
-_HIP_BAND_FRAC = (0.95, 1.20)
+# Lower bound matters more than it looks: for a subject standing with arms
+# at their sides (the common kiosk pose), the hands/wrists rejoin the torso
+# silhouette at roughly frac=1.05, and that rejoining shows up as a sharp
+# *widening* spike in the contiguous centerline run (hand-to-thigh, not
+# true hip). A band that extends down to frac=1.20 (as this used to) samples
+# straight through that artefact and, being a "max" band, latches onto it --
+# on the committed fixture that inflated hip width by ~17% (333px measured
+# vs. a true silhouette of ~271-276px) and made most fruit-shape categories
+# unreachable downstream (see classify.py). Keeping the band's lower edge
+# at 1.02 stays clear of the artefact while still covering the true
+# widest-point-of-the-hips region just below the hip joint landmarks.
+_HIP_BAND_FRAC = (0.90, 1.02)
 _BAND_SAMPLES = 25
+# When taking a band's "max" (or "min") width, a single anomalous row --
+# a stray segmentation artefact, a hand/arm brushing back into the band,
+# antialiasing noise at the silhouette edge -- can otherwise single-handedly
+# set the measurement. Using a high (for "max") / low (for "min")
+# percentile instead of the absolute extreme means an isolated outlier row
+# has to be joined by a substantial fraction of its neighbors before it can
+# move the result, while still tracking a genuine, sustained step in body
+# width (as in a real bust/waist/hip transition, or the synthetic stepped
+# mask in tests). 90/10 tolerates roughly the top/bottom decile of sampled
+# rows being outliers without being swayed by them.
+_BAND_EXTREME_PERCENTILE = 90
 
 
 @dataclass(frozen=True)
@@ -338,7 +360,16 @@ def _band_extreme(
     expected centerline (e.g. band strays outside the image) are skipped
     rather than counted as zero-width, so a partially out-of-frame band
     doesn't spuriously win a `min` search. Returns 0.0 if no row in the
-    band yielded a usable sample -- callers treat that as degenerate."""
+    band yielded a usable sample -- callers treat that as degenerate.
+
+    Uses a percentile rather than the absolute max/min so that a single
+    outlier row (segmentation noise, or an artefact like a hand rejoining
+    the torso silhouette) can't unilaterally determine the result -- see
+    `_BAND_EXTREME_PERCENTILE`. On a band with a genuine, sustained step in
+    width (real anatomy, or the stepped masks used in tests) this gives the
+    same answer a raw max/min would, since the dominant value still owns
+    the relevant percentile.
+    """
     lo, hi = (y0, y1) if y0 <= y1 else (y1, y0)
     widths = []
     for y in np.linspace(lo, hi, n_samples):
@@ -347,7 +378,8 @@ def _band_extreme(
             widths.append(wpx)
     if not widths:
         return 0.0
-    return max(widths) if mode == "max" else min(widths)
+    pct = _BAND_EXTREME_PERCENTILE if mode == "max" else 100 - _BAND_EXTREME_PERCENTILE
+    return float(np.percentile(widths, pct))
 
 
 def _measure_silhouette_widths(
