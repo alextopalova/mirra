@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "../state/session";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { PoseGuide, type GuideState } from "../components/PoseGuide";
@@ -6,7 +6,7 @@ import { CaptureFeedback, type CaptureFeedbackKind } from "../components/Capture
 import { DirectionArrow } from "../components/DirectionArrow";
 import { Spinner } from "../components/Spinner";
 import { useAutoCapture } from "../lib/useAutoCapture";
-import { MIRROR_PREVIEW } from "../lib/poseFit";
+import { MIRROR_PREVIEW, computeCoverCrop } from "../lib/poseFit";
 import "./capture.css";
 import "./screen.css";
 
@@ -25,14 +25,6 @@ export function CaptureScreen() {
   // Bumped by the restart-scan button to genuinely re-request the camera
   // (not just hide the error) when that's what failed.
   const [cameraAttempt, setCameraAttempt] = useState(0);
-  // Matches the live camera's own real aspect ratio once known. This only
-  // sizes the INNER `.capture-video-area` (the letterboxed video rect) — the
-  // outer `.capture-stage` footprint is fixed from the viewport alone (see
-  // capture.css) and never depends on this, so swapping the guess for the
-  // camera's true ratio never moves or resizes the stage itself, only how
-  // much of it the video fills. Feeds the CSS `aspect-ratio` property
-  // (w/h syntax) directly.
-  const [stageAspect, setStageAspect] = useState("3 / 4");
   // True once the current stream's real dimensions are known (i.e.
   // onLoadedMetadata has fired) — drives the "Starting camera…" placeholder
   // shown inside the reserved stage while the camera spins up, so that
@@ -108,17 +100,32 @@ export function CaptureScreen() {
   }, [cameraAttempt]);
 
   const handleLoadedMetadata = () => {
-    const v = videoRef.current;
-    if (v && v.videoWidth && v.videoHeight) {
-      setStageAspect(`${v.videoWidth} / ${v.videoHeight}`);
-    }
     setCameraReady(true);
   };
 
+  // Crops the captured photo to the same visible rect `object-fit: cover`
+  // shows on screen (see capture.css / poseFit.ts's computeCoverCrop), so
+  // the stored photo matches what the shopper actually aligned themselves
+  // to — not the full, uncropped raw camera frame. `video.clientWidth/
+  // Height` is the element's rendered on-screen box, which (styled to
+  // 100% x 100% of `.capture-video-area`) is exactly that visible
+  // container.
+  //
+  // Safety: auto-capture only fires once `evaluateFit` reports "fit", which
+  // requires the body's bounding box to stay inside GUIDE_BOX with margin
+  // (see poseFit.ts) — a fully-inside-[0,1] region of this SAME visible-crop
+  // fraction space. So whenever a capture fires, the body is provably
+  // within the visible rect this crop selects, and cropping to it can never
+  // cut the person off.
   const snap = (): string => {
     const v = videoRef.current!;
+    const crop = computeCoverCrop(v.videoWidth, v.videoHeight, v.clientWidth, v.clientHeight);
+    const sx = crop.x0 * v.videoWidth;
+    const sy = crop.y0 * v.videoHeight;
+    const sw = (crop.x1 - crop.x0) * v.videoWidth;
+    const sh = (crop.y1 - crop.y0) * v.videoHeight;
     const c = document.createElement("canvas");
-    c.width = v.videoWidth; c.height = v.videoHeight;
+    c.width = sw; c.height = sh;
     const ctx = c.getContext("2d")!;
     if (MIRROR_PREVIEW) {
       // The preview is shown mirrored — flip the canvas draw to match, so
@@ -126,7 +133,7 @@ export function CaptureScreen() {
       ctx.translate(c.width, 0);
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(v, 0, 0);
+    ctx.drawImage(v, sx, sy, sw, sh, 0, 0, sw, sh);
     return c.toDataURL("image/jpeg", 0.9);
   };
 
@@ -234,14 +241,12 @@ export function CaptureScreen() {
     <div className="screen">
       <h2 className="capture-heading">{heading}</h2>
       <div className="capture-stage">
-        {/* The camera's real aspect ratio only ever resizes THIS inner box,
-            centred and letterboxed within the outer stage — the stage's own
-            footprint (capture.css) is fixed from the viewport alone, so this
-            never shifts or resizes the page around it. */}
-        <div
-          className="capture-video-area"
-          style={{ "--capture-aspect": stageAspect } as CSSProperties}
-        >
+        {/* Always exactly fills the outer stage (capture.css) — the stage's
+            own footprint is fixed from the viewport alone, so this never
+            shifts or resizes the page around it, and the camera's real
+            aspect ratio never resizes this box either (the video is
+            cover-cropped to match it, not the other way around). */}
+        <div className="capture-video-area">
           <video
             ref={videoRef}
             autoPlay

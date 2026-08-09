@@ -1,17 +1,19 @@
 /* Outer reserved footprint. Deterministic from the viewport ALONE — no
-   dependency on `--capture-aspect` or any camera state — so it never
-   changes size or position after mount: not when camera metadata arrives,
-   not between the front and side steps, not when the camera errors out.
-   That stability is what stops the surrounding content (heading above,
-   hint below) from ever reflowing. It reserves the same "as large as fits"
-   footprint the previous aspect-fitted box used (min(92vw, 640px) wide,
-   up to 72vh tall) — just as a fixed rectangle instead of one shaped to
-   match the camera. See `.capture-video-area` below for where the camera's
-   real aspect ratio actually gets used. */
+   dependency on the camera's aspect ratio or any other camera state — so it
+   never changes size or position after mount: not when camera metadata
+   arrives, not between the front and side steps, not when the camera errors
+   out. That stability is what stops the surrounding content (heading above,
+   hint below) from ever reflowing.
+
+   `align-items: stretch` (rather than `center`) is belt-and-braces here:
+   `.capture-video-area` below is explicitly sized to 100% x 100% of this
+   box regardless of the flex alignment, but `stretch` keeps that intent
+   consistent should a future child ever rely on cross-axis stretching
+   instead of explicit sizing. */
 .capture-stage {
   position: relative;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
   width: min(92vw, 640px);
   height: 72vh;
@@ -21,48 +23,45 @@
   background: rgba(0, 0, 0, 0.25);
 }
 
-/* Inner, aspect-correct video rect, letterboxed and centred within the
-   fixed `.capture-stage` above. `aspect-ratio` + `max-width/max-height:
-   100%` on a flex item is what does the letterboxing (the standard
-   CSS-only technique) — this box always shrinks to the largest size that
-   both fits inside the stage AND matches `--capture-aspect`, so it grows
-   or shrinks in place around the same centre point without ever touching
-   the stage's own size.
+/* Cover-fills the fixed `.capture-stage` above completely — no empty bands
+   on any edge, ever, regardless of the camera's aspect ratio. This box is
+   always exactly the stage's own size (100% x 100%): unlike the previous
+   letterboxed design, it no longer tracks the camera's aspect ratio at all
+   (there is no more `--capture-aspect` custom property), so it's already
+   as stable as `.capture-stage` itself.
 
-   `--capture-aspect` starts at a plausible 3/4 guess and is swapped for the
-   camera's true ratio once `onLoadedMetadata` fires (see CaptureScreen) —
-   that swap only resizes THIS box, never the outer stage.
+   Because the video below uses `object-fit: cover`, the visible on-screen
+   frame is a CROPPED sub-rectangle of the raw camera frame whenever the
+   camera's aspect ratio differs from this box's. `poseFit.ts`'s
+   `computeCoverCrop` + `evaluateFit`'s `crop` parameter re-express raw
+   MediaPipe landmark coordinates in this box's own fraction space before
+   comparing them to GUIDE_BOX (see poseFit.ts), and `CaptureScreen.snap()`
+   crops the captured photo to the same rect, so detection, the on-screen
+   guide, and the stored photo all agree on what "the frame" means.
 
    PoseGuide and DirectionArrow are deliberately children of this element
    rather than of `.capture-stage`: both are `position: absolute; inset: 0`
    overlays meant to line up with where the person actually appears in the
-   video, and once the video is letterboxed inside the (possibly larger)
-   stage, that's this box's rect — not the stage's padded outer box. */
+   video, and this box IS that visible video rect. */
 .capture-video-area {
   position: relative;
-  min-width: 0;
-  min-height: 0;
-  max-width: 100%;
-  max-height: 100%;
-  aspect-ratio: var(--capture-aspect, 3 / 4);
-  /* PoseGuide is now height-locked to this box (see PoseGuide.css) and can
-     overflow it horizontally on a container narrower than the guide
-     artwork's own aspect ratio. Clip that overflow here, at the video's own
-     edges, rather than letting it bleed into `.capture-stage`'s surrounding
-     letterbox bars — the guide must never appear to extend past the video
-     it's overlaid on. */
+  width: 100%;
+  height: 100%;
+  /* PoseGuide is height-locked to this box (see PoseGuide.css) and can
+     overflow it horizontally on a box narrower than the guide artwork's
+     own aspect ratio. Clip that overflow here, at the video's own edges,
+     rather than letting it bleed into `.capture-stage`'s border — the
+     guide must never appear to extend past the video it's overlaid on. */
   overflow: hidden;
 }
 .capture-video-area video {
   display: block;
   width: 100%;
   height: 100%;
-  /* Belt-and-braces `object-fit: contain`: once `--capture-aspect` matches
-     the real stream this is a no-op (the box already matches exactly), but
-     it keeps the frame uncropped during the brief window before
-     `onLoadedMetadata` swaps the guessed ratio in. Cropping is what
-     previously forced shoppers to stand too far back. */
-  object-fit: contain;
+  /* `cover`, not `contain`: fills this box edge-to-edge, cropping whatever
+     part of the raw camera frame doesn't fit its aspect ratio, instead of
+     letterboxing. See the box comment above for what depends on this. */
+  object-fit: cover;
 }
 .capture-video-area video.mirrored { transform: scaleX(-1); }
 

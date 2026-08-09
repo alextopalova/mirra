@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { FilesetResolver, PoseLandmarker } from "@mediapipe/tasks-vision";
-import { evaluateFit, MIRROR_PREVIEW, type FitDirection, type FitStatus } from "./poseFit";
+import { evaluateFit, computeCoverCrop, MIRROR_PREVIEW, type FitDirection, type FitStatus } from "./poseFit";
 
 // Google's official model CDN — lite model, loaded at runtime (never bundled).
 const MODEL_URL =
@@ -106,7 +106,15 @@ export function useAutoCapture(
             lastSampleAt = now;
             const result = landmarker.detectForVideo(video, now);
             const landmarks = result.landmarks?.[0];
-            const fit = evaluateFit(landmarks, MIRROR_PREVIEW);
+            // `video.clientWidth/Height` is the video element's rendered
+            // on-screen box — which, since it's styled to fill
+            // `.capture-video-area` at 100% x 100% (capture.css), is exactly
+            // the visible cover-fill container `object-fit: cover` crops
+            // into. `video.videoWidth/Height` is the raw camera frame's
+            // intrinsic size the landmarks are normalised to. Together they
+            // give the same crop `object-fit: cover` is performing live.
+            const crop = computeCoverCrop(video.videoWidth, video.videoHeight, video.clientWidth, video.clientHeight);
+            const fit = evaluateFit(landmarks, crop, MIRROR_PREVIEW);
             consecutiveGood = fit.status === "fit" ? consecutiveGood + 1 : 0;
             setState((s) => ({ ...s, fitStatus: fit.status, hint: fit.hint, direction: fit.direction }));
             if (consecutiveGood >= STABLE_FRAMES_NEEDED && !fired) {

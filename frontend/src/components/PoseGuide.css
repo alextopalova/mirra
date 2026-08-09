@@ -7,10 +7,18 @@
 /* Sized to fill the preview's HEIGHT rather than "fit entirely inside it"
    (which is what inset:0 + width/height 100% + preserveAspectRatio=meet
    used to do): the artwork is portrait (viewBox ~0.727 w/h), so on a
-   container narrower than that — a 9:16 phone camera being the extreme
+   container narrower than that — a narrow phone viewport being the extreme
    case — `meet` was width-limited and only reached ~77% of the container's
    height, leaving dead space above and below and forcing shoppers to stand
    further back than necessary.
+
+   "Container" here is `.capture-video-area` (capture.css), which now
+   cover-fills the fixed, viewport-derived `.capture-stage` completely — its
+   aspect ratio comes from the VIEWPORT alone and no longer depends on the
+   attached camera's aspect ratio at all (the video is cropped to match via
+   `object-fit: cover`, not the other way around). So the "narrower than the
+   artwork" case below is now driven purely by how narrow/tall the device's
+   own screen is, not by what camera is plugged in.
 
    Instead the guide's own box is explicitly height-locked to the container
    (96% top-to-bottom, i.e. a small 2%-per-edge inset — see below), with its
@@ -27,14 +35,18 @@
    bottom edge, reading as cropped. A small margin, split top and bottom,
    keeps both ends clear of the frame edge.
 
-   On a container narrower than the artwork's aspect ratio (again, the 9:16
-   case), the height-locked box becomes wider than the container and
-   overflows sideways — clipped by `.capture-video-area`'s overflow:hidden
-   (capture.css). That clips empty margin around the figure, not the figure
-   itself: the outstretched-arm silhouette occupies the middle ~64% of the
-   artwork's width, well inside the ~80% that remains visible even at 9:16.
-   Head and feet are never at risk since this box never affects vertical
-   sizing — only GUIDE_VIEWBOX's own top/bottom padding does, handled above. */
+   On a container narrower than the artwork's aspect ratio (again, a narrow
+   phone viewport being the extreme case), the height-locked box becomes
+   wider than the container and overflows sideways — clipped by
+   `.capture-video-area`'s overflow:hidden (capture.css). That clips empty
+   margin around the figure, not the figure itself: the outstretched-arm
+   silhouette occupies the middle ~64% of the artwork's width, well inside
+   the ~80% that remains visible even at a 9:16 viewport. Head and feet are
+   never at risk since this box never affects vertical sizing — only
+   GUIDE_VIEWBOX's own top/bottom padding does, handled above. And because
+   this box's sizing depends only on the container (never on the camera),
+   that guarantee holds regardless of what camera is attached or how its
+   `object-fit: cover` crop lands. */
 .pose-guide {
   position: absolute;
   top: 2%;
