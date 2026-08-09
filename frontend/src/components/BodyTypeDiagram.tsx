@@ -1,24 +1,26 @@
 import "./BodyTypeDiagram.css";
 
-// Static id is safe here: this component renders once per report screen.
-const GRADIENT_ID = "btd-torso-fill";
-
 type Fruit = "pear" | "apple" | "hourglass" | "rectangle" | "inverted-triangle";
 type Japanese = "straight" | "wave" | "natural";
 
-// Half-widths (in SVG units, from the vertical centerline) at six body
-// levels: shoulder, bust, waist, hip, thigh, hem. This is the whole
-// "recipe" for each silhouette — tune a shape by editing its six numbers.
-const SHAPE_WIDTHS: Record<Fruit, number[]> = {
-  pear: [24, 26, 22, 40, 34, 27],
-  apple: [32, 38, 36, 28, 25, 21],
-  hourglass: [32, 34, 20, 34, 28, 22],
-  rectangle: [28, 28, 27, 28, 26, 22],
-  "inverted-triangle": [38, 32, 24, 20, 19, 17],
+// Designer-supplied illustrations, served from frontend/public/body-shapes.
+// Filenames match the `fruit` values used throughout the app so the lookup
+// below is direct — no risk of a silently-wrong mapping.
+const SHAPE_IMAGE: Record<Fruit, string> = {
+  pear: "/body-shapes/pear.png",
+  apple: "/body-shapes/apple.png",
+  hourglass: "/body-shapes/hourglass.png",
+  rectangle: "/body-shapes/rectangle.png",
+  "inverted-triangle": "/body-shapes/inverted-triangle.png",
 };
 
-const LEVELS_Y = [54, 86, 140, 186, 230, 298];
-const CENTER_X = 80;
+const SHAPE_ALT: Record<Fruit, string> = {
+  pear: "Pear body shape illustration",
+  apple: "Apple body shape illustration",
+  hourglass: "Hourglass body shape illustration",
+  rectangle: "Rectangle body shape illustration",
+  "inverted-triangle": "Inverted triangle body shape illustration",
+};
 
 const SILHOUETTE_GUIDANCE: Record<Fruit, string> = {
   pear: "Structured shoulders and A-line hems bring your frame into balance.",
@@ -41,34 +43,11 @@ function cap(s: string): string {
 }
 
 function isFruit(f: string): f is Fruit {
-  return Object.prototype.hasOwnProperty.call(SHAPE_WIDTHS, f);
+  return Object.prototype.hasOwnProperty.call(SHAPE_IMAGE, f);
 }
 
 function isJapanese(j: string): j is Japanese {
   return Object.prototype.hasOwnProperty.call(FABRIC_GUIDANCE, j);
-}
-
-// Builds a single smooth, closed silhouette path from the six half-widths —
-// a soft continuous contour rather than straight-line stick-figure segments.
-function silhouettePath(widths: number[]): string {
-  const pts = LEVELS_Y.map((y, i) => ({ y, w: widths[i] }));
-  let d = `M ${CENTER_X + pts[0].w} ${pts[0].y}`;
-  for (let i = 1; i < pts.length; i++) {
-    const prev = pts[i - 1];
-    const p = pts[i];
-    const midY = (prev.y + p.y) / 2;
-    d += ` C ${CENTER_X + prev.w} ${midY}, ${CENTER_X + p.w} ${midY}, ${CENTER_X + p.w} ${p.y}`;
-  }
-  const last = pts[pts.length - 1];
-  d += ` Q ${CENTER_X} ${last.y + 16}, ${CENTER_X - last.w} ${last.y}`;
-  for (let i = pts.length - 2; i >= 0; i--) {
-    const p = pts[i];
-    const next = pts[i + 1];
-    const midY = (p.y + next.y) / 2;
-    d += ` C ${CENTER_X - next.w} ${midY}, ${CENTER_X - p.w} ${midY}, ${CENTER_X - p.w} ${p.y}`;
-  }
-  d += ` Q ${CENTER_X} ${pts[0].y - 8}, ${CENTER_X + pts[0].w} ${pts[0].y} Z`;
-  return d;
 }
 
 // Sorts the three bone-type weights (which sum to ~1) descending and turns
@@ -93,7 +72,6 @@ export function BodyTypeDiagram({ fruit, japanese, japaneseWeights }: {
 }) {
   const shapeKey: Fruit = isFruit(fruit) ? fruit : "rectangle";
   const fabricKey: Japanese = isJapanese(japanese) ? japanese : "natural";
-  const path = silhouettePath(SHAPE_WIDTHS[shapeKey]);
   const weights = japaneseWeights ?? {};
   const ranked = rankWeights(weights);
   const dominant = ranked[0][0];
@@ -102,17 +80,13 @@ export function BodyTypeDiagram({ fruit, japanese, japaneseWeights }: {
     <div className="body-type-diagram" aria-label={`Body shape: ${cap(shapeKey)}`}>
       <p className="btd-label">Your silhouette</p>
       <div className="btd-figure">
-        <svg viewBox="0 0 160 320" className="btd-svg" aria-hidden focusable="false">
-          <defs>
-            <linearGradient id={GRADIENT_ID} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" style={{ stopColor: "var(--accent)", stopOpacity: 0.4 }} />
-              <stop offset="100%" style={{ stopColor: "var(--accent)", stopOpacity: 0.08 }} />
-            </linearGradient>
-          </defs>
-          <path d={path} className="btd-torso" fill={`url(#${GRADIENT_ID})`} />
-          <rect x="72" y="36" width="16" height="20" rx="6" className="btd-neck" />
-          <circle cx="80" cy="26" r="15" className="btd-head" />
-        </svg>
+        <div className="btd-illustration-surface">
+          <img
+            src={SHAPE_IMAGE[shapeKey]}
+            alt={SHAPE_ALT[shapeKey]}
+            className="btd-illustration"
+          />
+        </div>
       </div>
 
       <div className="btd-lean">

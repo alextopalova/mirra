@@ -22,11 +22,27 @@
   filter: blur(2px);
   z-index: 0;
 }
-.btd-svg { position: relative; z-index: 1; width: clamp(120px, 18vw, 190px); height: auto; }
+/* The illustration keeps its own bright, designer-chosen colour and sits on
+   a soft neutral surface (not bare on the ambient glow) so it reads as a
+   deliberate card rather than an image pasted onto the background. */
+.btd-illustration-surface {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 18px 20px 0;
+  border-radius: var(--radius);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
 
-.btd-torso { stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
-.btd-head, .btd-neck { fill: var(--glass-bg-strong); stroke: var(--accent); stroke-width: 2.5; }
-.btd-neck { stroke: none; }
+.btd-illustration {
+  display: block;
+  width: clamp(130px, 17vw, 200px);
+  height: auto;
+}
 
 .btd-lean { margin-top: 20px; width: min(100%, 300px); }
 .btd-lean-bar {
