@@ -107,6 +107,74 @@ async def test_poll_times_out_cleanly_after_max_tries_without_success():
 
 
 @pytest.mark.asyncio
+async def test_poll_succeeds_via_task_status_field():
+    """skin-tone-analysis uses `task_status` instead of `status`."""
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        task_status = "success" if calls["n"] >= 2 else "processing"
+        return httpx.Response(
+            200,
+            json={"data": {"task_status": task_status, "results": {"tone": "warm"}}},
+        )
+
+    client = YouCamClient(transport=httpx.MockTransport(handler))
+    result = await client.poll("skin-tone-analysis", "task123", interval=0)
+
+    assert result["task_status"] == "success"
+    assert result["results"]["tone"] == "warm"
+    assert calls["n"] >= 2
+
+
+@pytest.mark.asyncio
+async def test_poll_raises_on_task_status_error_with_real_error_payload():
+    """Real payload observed live against /task/skin-tone-analysis."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "error": "error_face_not_forward_facing",
+                    "results": None,
+                    "task_status": "error",
+                }
+            },
+        )
+
+    client = YouCamClient(transport=httpx.MockTransport(handler))
+
+    with pytest.raises(YouCamTaskError) as excinfo:
+        await client.poll("skin-tone-analysis", "task123", interval=0)
+
+    assert "error_face_not_forward_facing" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_poll_error_field_literal_none_string_falls_back_to_raw_payload():
+    """The API sometimes sends the string "None" (not null) as the error detail;
+    that useless text must not be the entirety of the raised message."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"data": {"task_status": "error", "error": "None", "results": None}},
+        )
+
+    client = YouCamClient(transport=httpx.MockTransport(handler))
+
+    with pytest.raises(YouCamTaskError) as excinfo:
+        await client.poll("skin-tone-analysis", "task123", interval=0)
+
+    message = str(excinfo.value)
+    # Must not degrade to a bare, uninformative "None".
+    assert not message.rstrip().endswith("failed: None")
+    # Should fall back to something informative (the raw payload contents).
+    assert "task_status" in message or "error" in message
+
+
+@pytest.mark.asyncio
 async def test_poll_treats_missing_status_as_still_running_then_succeeds():
     calls = {"n": 0}
 

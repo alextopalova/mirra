@@ -71,12 +71,33 @@ Response: `{ "status": 200, "data": { "task_id": "<id>" } }`
 **`results` is an OBJECT with a `url` key** (not an array as older docs suggest). Handle both shapes defensively.
 Result URLs are presigned and expire in ~2 hours. Poll every ~2.5s; the generation takes tens of seconds.
 
+> **⚠️ VERIFIED LIVE (2026-08-09) — the polling status field name DIFFERS PER ENDPOINT:**
+> - `task/cloth` → the terminal-state field is `status` (`{"data": {"status": "success", ...}}`).
+> - `task/skin-tone-analysis` → the terminal-state field is **`task_status`**, not `status`
+>   (see the real error payload below). `data.status` is simply absent on this endpoint.
+>
+> **Clients must accept both field names** (prefer `task_status` if present, else `status`) or a
+> skin-tone-analysis error/success will look like "missing status" and the poller will spin until
+> it times out (~150s) instead of surfacing the result. `app/youcam/client.py::poll()` does this.
+
 ## 3. Skin Tone Analysis — `POST /s2s/v2.0/task/skin-tone-analysis`
 
 Exists and is authorized. Requires `src_file_url` or `src_file_id` (same upload flow).
 Result field names NOT yet verified live — inspect the poll payload on first real call and adapt.
 **Season label is NOT expected to be returned** — derive the season from the returned tone/undertone values
 in `app/youcam/color.py`.
+
+**Poll uses `task_status`, not `status` (VERIFIED live error payload):**
+```json
+{ "error": "error_face_not_forward_facing", "results": null, "task_status": "error" }
+```
+- The terminal state is in `data.task_status` (`"error"` here), not `data.status`.
+- **`error` sometimes comes back as the literal string `"None"` (not JSON `null`)** on other failures —
+  treat `"None"`/`"none"`/empty string as "no detail available" and fall back to reporting the raw
+  payload rather than surfacing the useless text `"None"` to the caller.
+- **Input requirement, verified live:** the source image must show a single **forward-facing face of
+  adequate size/resolution**. A downscaled full-body photo was rejected with
+  `error_face_not_forward_facing` — crop/zoom to a clear frontal face shot before calling this endpoint.
 
 ## 4. Budget
 

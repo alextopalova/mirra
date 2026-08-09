@@ -54,6 +54,30 @@ def _require(d: dict, key: str, context: str) -> Any:
     return d[key]
 
 
+def _is_meaningless(value: Any) -> bool:
+    """True for None, "", and the literal (case-insensitive) string "none",
+    which the API sometimes sends instead of an actual null/absent value."""
+    if value is None:
+        return True
+    if isinstance(value, str) and value.strip().lower() in ("", "none"):
+        return True
+    return False
+
+
+def _error_detail(data: dict) -> str:
+    """Pull a useful error detail out of a terminal-error task payload.
+
+    Prefers the machine-readable `error` code, falling back to `message`,
+    and finally to the raw payload if neither carries real information
+    (the API sometimes sends the literal string "None" for `error`).
+    """
+    for key in ("error", "message"):
+        value = data.get(key)
+        if not _is_meaningless(value):
+            return str(value)
+    return str(data)
+
+
 def _normalise_headers(headers: Any) -> dict:
     """headers may already be a dict, or a list of {"name": ..., "value": ...} objects."""
     if isinstance(headers, dict):
@@ -157,14 +181,20 @@ class YouCamClient:
             resp.raise_for_status()
             data = _unwrap(resp.json())
 
-            status = data.get("status")
-            normalised = status.lower() if isinstance(status, str) else status
+            # Different endpoints name the state field differently: `task/cloth`
+            # uses "status", `task/skin-tone-analysis` uses "task_status".
+            # Prefer task_status when present, fall back to status otherwise.
+            state = data.get("task_status")
+            if state is None:
+                state = data.get("status")
+            normalised = state.lower() if isinstance(state, str) else state
 
             if normalised in _SUCCESS_STATUSES:
                 return data
             if normalised in _ERROR_STATUSES:
-                message = data.get("error") or data.get("message") or data
-                raise YouCamTaskError(f"YouCam task '{task}' ({task_id}) failed: {message}")
+                raise YouCamTaskError(
+                    f"YouCam task '{task}' ({task_id}) failed: {_error_detail(data)}"
+                )
 
             # Anything else (running/processing/pending/missing) -> keep waiting,
             # unless this was the last allowed attempt.
