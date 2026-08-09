@@ -1,40 +1,63 @@
+/* Outer reserved footprint. Deterministic from the viewport ALONE — no
+   dependency on `--capture-aspect` or any camera state — so it never
+   changes size or position after mount: not when camera metadata arrives,
+   not between the front and side steps, not when the camera errors out.
+   That stability is what stops the surrounding content (heading above,
+   hint below) from ever reflowing. It reserves the same "as large as fits"
+   footprint the previous aspect-fitted box used (min(92vw, 640px) wide,
+   up to 72vh tall) — just as a fixed rectangle instead of one shaped to
+   match the camera. See `.capture-video-area` below for where the camera's
+   real aspect ratio actually gets used. */
 .capture-stage {
   position: relative;
-  /* Falls back to a portrait default until the camera's real aspect ratio is
-     known (see CaptureScreen's onLoadedMetadata), then matches it so the
-     shopper doesn't have to retreat far to fit in a mismatched tall box.
-     `--capture-aspect-num` is the same ratio as a plain number (width/height).
-
-     Width and max-height used to be two INDEPENDENT constraints (width fixed
-     at min(92vw, 640px), height separately capped at 72vh). When the height
-     cap was the binding one, the box kept full width but got shorter than
-     the aspect-ratio called for, and `aspect-ratio` had no room left to
-     apply — the video (object-fit: contain) then let sizes itself down to
-     fit that shrunken box and letterboxed with empty bands on the sides.
-     That's especially visible on the side/profile step, where a narrow
-     portrait subject makes the wasted horizontal space obvious.
-
-     Fix: derive width as the min of ALL three limits — 92vw, 640px, and
-     "the widest this can be while a height of 72vh still satisfies the
-     aspect ratio" (72vh * ratio) — so whichever dimension actually binds,
-     the other is computed from it via `aspect-ratio` (height defaults to
-     auto) and the box always exactly matches the camera's aspect. No
-     independent max-height clamp remains to fight the ratio. */
-  aspect-ratio: var(--capture-aspect, 3 / 4);
-  width: min(92vw, 640px, calc(72vh * var(--capture-aspect-num, 0.75)));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(92vw, 640px);
+  height: 72vh;
   border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--glass-border);
   background: rgba(0, 0, 0, 0.25);
 }
-.capture-stage video {
+
+/* Inner, aspect-correct video rect, letterboxed and centred within the
+   fixed `.capture-stage` above. `aspect-ratio` + `max-width/max-height:
+   100%` on a flex item is what does the letterboxing (the standard
+   CSS-only technique) — this box always shrinks to the largest size that
+   both fits inside the stage AND matches `--capture-aspect`, so it grows
+   or shrinks in place around the same centre point without ever touching
+   the stage's own size.
+
+   `--capture-aspect` starts at a plausible 3/4 guess and is swapped for the
+   camera's true ratio once `onLoadedMetadata` fires (see CaptureScreen) —
+   that swap only resizes THIS box, never the outer stage.
+
+   PoseGuide and DirectionArrow are deliberately children of this element
+   rather than of `.capture-stage`: both are `position: absolute; inset: 0`
+   overlays meant to line up with where the person actually appears in the
+   video, and once the video is letterboxed inside the (possibly larger)
+   stage, that's this box's rect — not the stage's padded outer box. */
+.capture-video-area {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: var(--capture-aspect, 3 / 4);
+}
+.capture-video-area video {
+  display: block;
   width: 100%;
   height: 100%;
-  /* Show the whole sensor frame (letterboxed if needed) instead of cropping
-     it hard — cropping is what forced shoppers to stand far back. */
+  /* Belt-and-braces `object-fit: contain`: once `--capture-aspect` matches
+     the real stream this is a no-op (the box already matches exactly), but
+     it keeps the frame uncropped during the brief window before
+     `onLoadedMetadata` swaps the guessed ratio in. Cropping is what
+     previously forced shoppers to stand too far back. */
   object-fit: contain;
 }
-.capture-stage video.mirrored { transform: scaleX(-1); }
+.capture-video-area video.mirrored { transform: scaleX(-1); }
 
 /* This screen is read from several metres away by design (the shopper has
    to stand back to fit the guide) — every message on it is scaled up from
@@ -57,12 +80,18 @@
   justify-content: center; z-index: 2; font-size: clamp(72px, 26vw, 140px); font-weight: 700;
   color: var(--text); text-shadow: 0 4px 24px rgba(0, 0, 0, 0.5); }
 
-/* "Redo the auto-capture" fallback — sits on top of the camera window
-   (not below it) so it's reachable the moment something has genuinely
-   failed: camera denied, pose model failed to load, or the no-fit timeout
-   elapsed. Its own scrim/panel is opaque theme glass (not the light-on-video
-   treatment DirectionArrow/PoseGuide use) because it's a solid UI panel
-   covering the feed, not artwork drawn transparently over live video. */
+/* Shared "solid panel over the feed" treatment: opaque theme glass (not the
+   light-on-video treatment DirectionArrow/PoseGuide use) because both of
+   these cover the live video with an actual UI panel rather than drawing
+   artwork transparently over it — same reasoning as the restart overlay
+   below.
+    - `.capture-loading-overlay`: calm "starting up" placeholder shown
+      inside the reserved stage while the camera is still spinning up, so
+      the space reads as occupied instead of collapsing.
+    - `.capture-restart-overlay`: "redo the auto-capture" fallback, reachable
+      the moment something has genuinely failed: camera denied, pose model
+      failed to load, or the no-fit timeout elapsed. */
+.capture-loading-overlay,
 .capture-restart-overlay {
   position: absolute;
   inset: 0;
@@ -80,9 +109,20 @@
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
 }
+/* This is an error state, not an ordinary prompt — both lines use the
+   --danger token (on the opaque glass panel above, never on raw video, so
+   plain theme-token contrast applies same as ErrorState's heading) so the
+   retry affordance reads as "something went wrong" at a glance, not as a
+   routine action. */
+.capture-restart-title {
+  font-size: clamp(24px, 3.6vw, 34px);
+  font-weight: 800;
+  color: var(--danger);
+  max-width: 90%;
+}
 .capture-restart-message {
   font-size: clamp(20px, 3.2vw, 28px);
   font-weight: 700;
-  color: var(--text);
+  color: var(--danger);
   max-width: 90%;
 }

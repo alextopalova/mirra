@@ -4,6 +4,7 @@ import { PrimaryButton } from "../components/PrimaryButton";
 import { PoseGuide, type GuideState } from "../components/PoseGuide";
 import { CaptureFeedback, type CaptureFeedbackKind } from "../components/CaptureFeedback";
 import { DirectionArrow } from "../components/DirectionArrow";
+import { Spinner } from "../components/Spinner";
 import { useAutoCapture } from "../lib/useAutoCapture";
 import { MIRROR_PREVIEW } from "../lib/poseFit";
 import "./capture.css";
@@ -24,13 +25,20 @@ export function CaptureScreen() {
   // Bumped by the restart-scan button to genuinely re-request the camera
   // (not just hide the error) when that's what failed.
   const [cameraAttempt, setCameraAttempt] = useState(0);
-  // Matches the live camera's own aspect ratio once known, so the stage
-  // isn't a mismatched tall box the shopper has to retreat far to fill.
-  // `ratio` feeds the CSS `aspect-ratio` property (w/h syntax); `num` is the
-  // same ratio as a plain number so the width calc in capture.css can derive
-  // whichever of width/height is the binding constraint (see that file) —
-  // `aspect-ratio` alone can't do that when it's fighting a max-height clamp.
-  const [stageAspect, setStageAspect] = useState({ ratio: "3 / 4", num: 3 / 4 });
+  // Matches the live camera's own real aspect ratio once known. This only
+  // sizes the INNER `.capture-video-area` (the letterboxed video rect) — the
+  // outer `.capture-stage` footprint is fixed from the viewport alone (see
+  // capture.css) and never depends on this, so swapping the guess for the
+  // camera's true ratio never moves or resizes the stage itself, only how
+  // much of it the video fills. Feeds the CSS `aspect-ratio` property
+  // (w/h syntax) directly.
+  const [stageAspect, setStageAspect] = useState("3 / 4");
+  // True once the current stream's real dimensions are known (i.e.
+  // onLoadedMetadata has fired) — drives the "Starting camera…" placeholder
+  // shown inside the reserved stage while the camera spins up, so that
+  // space reads as occupied rather than collapsing. Reset whenever a fresh
+  // stream is requested (restart-scan bumps cameraAttempt).
+  const [cameraReady, setCameraReady] = useState(false);
   const timerRef = useRef<number | null>(null);
 
   // Big "photo captured" / "turn to your side" overlays shown between
@@ -82,6 +90,7 @@ export function CaptureScreen() {
   useEffect(() => {
     let cancelled = false;
     let stream: MediaStream | undefined;
+    setCameraReady(false);
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 1280 } } })
       .then((s) => {
@@ -101,8 +110,9 @@ export function CaptureScreen() {
   const handleLoadedMetadata = () => {
     const v = videoRef.current;
     if (v && v.videoWidth && v.videoHeight) {
-      setStageAspect({ ratio: `${v.videoWidth} / ${v.videoHeight}`, num: v.videoWidth / v.videoHeight });
+      setStageAspect(`${v.videoWidth} / ${v.videoHeight}`);
     }
+    setCameraReady(true);
   };
 
   const snap = (): string => {
@@ -180,6 +190,28 @@ export function CaptureScreen() {
   // (on top of the camera window) whenever one of those is true.
   const needsRestart = !!cameraError || auto.needsRestart;
 
+  // Space inside the stage reads as occupied (not collapsed/blank) while the
+  // camera is still starting. Suppressed once something has genuinely
+  // failed — the restart overlay takes over that job then.
+  const showCameraLoading = !cameraError && !cameraReady && !needsRestart;
+
+  // Distinguish *why* the restart affordance is showing, since the remedy
+  // differs: a blocked camera needs an OS/browser permission change, a
+  // failed model load just needs a retry, and a no-fit timeout needs the
+  // shopper to reposition. `auto.phase === "unavailable"` is set only when
+  // the pose model itself failed to load (see useAutoCapture); any other
+  // `needsRestart` cause is the no-fit fallback timeout.
+  const restartTitle = cameraError
+    ? "Camera blocked"
+    : auto.phase === "unavailable"
+    ? "Styling guide couldn't load"
+    : "Couldn't get a clear view of you";
+  const restartDetail =
+    cameraError ??
+    (auto.phase === "unavailable"
+      ? "Restart the scan to try loading it again."
+      : "Stand back so your whole body is visible, then restart the scan.");
+
   // Genuinely re-attempts detection, not just hiding the fallback UI: resets
   // the fit/stability state and fallback timer, re-initialises the pose
   // detector if that's what failed (see useAutoCapture's restart), and
@@ -201,28 +233,38 @@ export function CaptureScreen() {
   return (
     <div className="screen">
       <h2 className="capture-heading">{heading}</h2>
-      <div
-        className="capture-stage"
-        style={{ "--capture-aspect": stageAspect.ratio, "--capture-aspect-num": stageAspect.num } as CSSProperties}
-      >
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          onLoadedMetadata={handleLoadedMetadata}
-          className={MIRROR_PREVIEW ? "mirrored" : ""}
-        />
-        <PoseGuide variant={step} state={guideState} />
-        <DirectionArrow direction={direction} />
+      <div className="capture-stage">
+        {/* The camera's real aspect ratio only ever resizes THIS inner box,
+            centred and letterboxed within the outer stage — the stage's own
+            footprint (capture.css) is fixed from the viewport alone, so this
+            never shifts or resizes the page around it. */}
+        <div
+          className="capture-video-area"
+          style={{ "--capture-aspect": stageAspect } as CSSProperties}
+        >
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            onLoadedMetadata={handleLoadedMetadata}
+            className={MIRROR_PREVIEW ? "mirrored" : ""}
+          />
+          <PoseGuide variant={step} state={guideState} />
+          <DirectionArrow direction={direction} />
+        </div>
+        {showCameraLoading && (
+          <div className="capture-loading-overlay">
+            <Spinner label="Starting camera…" />
+          </div>
+        )}
         {count !== null && <div className="capture-countdown">{count}</div>}
         {feedback !== null && <CaptureFeedback kind={feedback} exiting={feedbackExiting} />}
         {needsRestart && feedback === null && (
           <div className="capture-restart-overlay">
-            <p className="capture-restart-message">
-              {cameraError ?? "Still getting you in frame — let's try again."}
-            </p>
-            <PrimaryButton label="Restart scan" onClick={restartScan} />
+            <p className="capture-restart-title">{restartTitle}</p>
+            <p className="capture-restart-message">{restartDetail}</p>
+            <PrimaryButton label="Restart scan" variant="danger" onClick={restartScan} />
           </div>
         )}
       </div>

@@ -13,3 +13,12 @@
 .btn:disabled { opacity: 0.4; pointer-events: none; }
 .btn-solid { background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%); }
 .btn-ghost { background: var(--glass-bg-strong); border: 1px solid var(--glass-border); }
+/* Error/retry affordance: an outlined red variant rather than a red fill,
+   so the label can stay --danger-on-light (same pairing ErrorState already
+   uses for its heading) instead of needing a separate light-text token for
+   contrast against a solid red fill. */
+.btn-danger {
+  background: var(--glass-bg-strong);
+  border: 2px solid var(--danger);
+  color: var(--danger);
+}

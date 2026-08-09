@@ -1,7 +1,7 @@
 import "./PrimaryButton.css";
 
 export function PrimaryButton({ label, onClick, disabled = false, variant = "solid" }: {
-  label: string; onClick: () => void; disabled?: boolean; variant?: "solid" | "ghost";
+  label: string; onClick: () => void; disabled?: boolean; variant?: "solid" | "ghost" | "danger";
 }) {
   return (
     <button className={`btn btn-${variant}`} onClick={onClick} disabled={disabled}>
