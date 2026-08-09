@@ -11,3 +11,4 @@ __pycache__/
 .idea/
 backend/models/*.task
 backend/models/*.tflite
+example_picture.jpg
