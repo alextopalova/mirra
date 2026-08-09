@@ -1,5 +1,12 @@
 .body-type-diagram { display: flex; flex-direction: column; align-items: center; }
 
+/* Short orientation label for each region — matches the eyebrow style used
+   elsewhere in the report (uppercase, accent-coloured, terse). */
+.btd-label {
+  font-size: 13px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--accent); margin: 0 0 8px;
+}
+
 /* The silhouette floats on the ambient background with a soft accent glow
    behind it, rather than sitting in its own glass box — it reads as the
    illustrated centerpiece of this half of the report, not a dashboard card. */
@@ -32,6 +39,9 @@
 
 .btd-guidance { margin-top: 20px; display: flex; flex-direction: column; gap: 8px; max-width: 340px; }
 .btd-guidance p { font-size: 19px; line-height: 1.4; color: var(--text-dim); margin: 0; }
+/* .btd-label is a <p> here too — restore the eyebrow style over the
+   ".btd-guidance p" rule above, which otherwise wins on specificity. */
+.btd-guidance p.btd-label { font-size: 13px; color: var(--accent); margin: 0 0 4px; }
 
 @media (max-width: 480px) {
   .btd-figure::before { width: 160px; height: 180px; }

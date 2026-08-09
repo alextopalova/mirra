@@ -100,6 +100,7 @@ export function BodyTypeDiagram({ fruit, japanese, japaneseWeights }: {
 
   return (
     <div className="body-type-diagram" aria-label={`Body shape: ${cap(shapeKey)}`}>
+      <p className="btd-label">Your silhouette</p>
       <div className="btd-figure">
         <svg viewBox="0 0 160 320" className="btd-svg" aria-hidden focusable="false">
           <defs>
@@ -115,6 +116,7 @@ export function BodyTypeDiagram({ fruit, japanese, japaneseWeights }: {
       </div>
 
       <div className="btd-lean">
+        <p className="btd-label">Bone type</p>
         <div className="btd-lean-bar">
           {JAPANESE_ORDER.map((k) => (
             <span
@@ -128,6 +130,7 @@ export function BodyTypeDiagram({ fruit, japanese, japaneseWeights }: {
       </div>
 
       <div className="btd-guidance">
+        <p className="btd-label">Styling notes</p>
         <p>{SILHOUETTE_GUIDANCE[shapeKey]}</p>
         <p>{FABRIC_GUIDANCE[fabricKey]}</p>
       </div>

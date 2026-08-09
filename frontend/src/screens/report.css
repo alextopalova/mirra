@@ -3,9 +3,24 @@
   font-size: 14px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
   color: var(--accent);
 }
+
+/* The headline is one identity statement — "Season · Shape, Lean-leaning" —
+   built from two flex items so a wrap (on narrow portrait viewports) breaks
+   cleanly between season and shape rather than mid-word. */
 .report-headline {
-  font-size: clamp(48px, 7vw, 72px); font-weight: 700; line-height: 1;
-  letter-spacing: -0.02em; margin: 0;
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline;
+  column-gap: 16px; row-gap: 2px;
+  font-size: clamp(34px, 6.4vw, 64px); font-weight: 700; line-height: 1.08;
+  letter-spacing: -0.02em; margin: 0; max-width: min(96vw, 900px);
+}
+.report-headline-part { white-space: normal; }
+.report-headline-sep { color: var(--accent); font-weight: 500; }
+
+/* Bridges the identity line and the detail grid: signals "here's what that
+   means" before the shape + colour breakdown. */
+.report-section-label {
+  font-size: 13px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-dim); margin: 0;
 }
 
 /* Deliberately asymmetric: the shape is an open illustration on the
@@ -23,7 +38,14 @@
 
 .report-colors { align-self: stretch; display: flex; flex-direction: column; justify-content: center; }
 
+.report-cta { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.report-cta-label {
+  font-size: 13px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-dim); margin: 0;
+}
+
 @media (max-width: 720px) {
+  .report-headline { font-size: clamp(26px, 6.8vw, 44px); column-gap: 10px; }
   .report-body { grid-template-columns: 1fr; gap: 36px; justify-items: center; }
   .report-colors { width: min(92vw, 420px); }
 }
