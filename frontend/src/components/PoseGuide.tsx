@@ -1,26 +1,40 @@
 import "./PoseGuide.css";
+import {
+  GUIDE_VIEWBOX,
+  FRONT_OUTLINE_PATHS,
+  SIDE_OUTLINE_PATHS,
+} from "./poseGuidePaths";
 
 export type GuideState = "idle" | "searching" | "adjust" | "fit";
 
-// Clean anatomical silhouette contours (head, neck, sloped shoulders, arms
-// held slightly away from the body with hands, torso tapering to the waist,
-// hips, legs apart, feet) — a single continuous outline per variant, in the
-// style of an airport body-scanner guide. Authored in a 300x700 viewBox.
-const FRONT_OUTLINE =
-  "M 135.6 41.6 Q 150.0 20.0 164.4 41.6 L 170.5 50.7 Q 186.0 74.0 178.8 93.8 L 174.8 104.8 Q 170.0 118.0 167.8 130.6 L 166.1 140.1 Q 165.0 146.0 170.2 149.0 L 215.7 175.9 Q 226.0 182.0 228.4 193.8 L 246.4 280.4 Q 250.0 298.0 248.0 315.9 L 239.3 392.1 Q 238.0 404.0 239.6 415.9 L 241.3 429.3 Q 244.0 450.0 231.4 432.9 L 223.1 421.7 Q 216.0 412.0 216.3 400.0 L 219.6 274.0 Q 220.0 258.0 213.9 243.2 L 205.0 221.4 Q 202.0 214.0 200.0 221.7 L 177.5 308.7 Q 172.0 330.0 186.3 346.7 L 207.0 370.8 Q 220.0 386.0 217.9 405.9 L 211.7 466.1 Q 210.0 482.0 208.0 497.9 L 203.7 532.1 Q 202.0 546.0 199.0 559.7 L 190.1 600.2 Q 188.0 610.0 191.2 619.5 L 194.8 630.5 Q 198.0 640.0 200.4 649.7 L 201.3 653.2 Q 204.0 664.0 186.9 658.6 L 177.4 655.6 Q 166.0 652.0 166.5 640.0 L 169.6 572.0 Q 170.0 562.0 169.3 552.0 L 166.8 514.0 Q 166.0 502.0 165.6 490.0 L 164.3 452.0 Q 164.0 442.0 160.8 432.5 L 153.2 409.5 Q 150.0 400.0 146.8 409.5 L 139.2 432.5 Q 136.0 442.0 135.7 452.0 L 134.4 490.0 Q 134.0 502.0 133.2 514.0 L 130.7 552.0 Q 130.0 562.0 130.4 572.0 L 133.5 640.0 Q 134.0 652.0 122.6 655.6 L 113.1 658.6 Q 96.0 664.0 98.7 653.2 L 99.6 649.7 Q 102.0 640.0 105.2 630.5 L 108.8 619.5 Q 112.0 610.0 109.9 600.2 L 101.0 559.7 Q 98.0 546.0 96.3 532.1 L 92.0 497.9 Q 90.0 482.0 88.3 466.1 L 82.1 405.9 Q 80.0 386.0 93.0 370.8 L 113.7 346.7 Q 128.0 330.0 122.5 308.7 L 100.0 221.7 Q 98.0 214.0 95.0 221.4 L 86.1 243.2 Q 80.0 258.0 80.4 274.0 L 83.7 400.0 Q 84.0 412.0 76.9 421.7 L 68.6 432.9 Q 56.0 450.0 58.7 429.3 L 60.4 415.9 Q 62.0 404.0 60.7 392.1 L 52.0 315.9 Q 50.0 298.0 53.6 280.4 L 71.6 193.8 Q 74.0 182.0 84.3 175.9 L 129.8 149.0 Q 135.0 146.0 133.9 140.1 L 132.3 130.6 Q 130.0 118.0 125.2 104.8 L 121.2 93.8 Q 114.0 74.0 129.5 50.7 L 135.6 41.6 Z";
+/**
+ * The "stand here" body outline overlaid on the camera preview.
+ *
+ * Artwork comes from the designer-supplied silhouettes (see poseGuidePaths.ts).
+ * Those are filled contour shapes rather than stroked outlines, so the colour is
+ * driven by `fill` in PoseGuide.css — which also handles the per-state treatment
+ * (dim while searching, brighter while adjusting, accent + glow once the shopper
+ * fits the guide).
+ */
+export function PoseGuide({
+  variant,
+  state = "idle",
+}: {
+  variant: "front" | "side";
+  state?: GuideState;
+}) {
+  const paths = variant === "front" ? FRONT_OUTLINE_PATHS : SIDE_OUTLINE_PATHS;
 
-const SIDE_OUTLINE =
-  "M 139.2 30.8 Q 150.0 20.0 160.8 29.9 L 163.2 32.1 Q 174.0 42.0 176.7 51.9 L 177.4 54.4 Q 180.0 64.0 185.8 68.5 L 187.2 69.5 Q 193.0 74.0 188.1 78.5 L 186.9 79.5 Q 182.0 84.0 180.2 91.2 L 179.8 92.8 Q 178.0 100.0 172.3 108.2 L 170.3 111.0 Q 164.0 120.0 161.5 131.7 L 159.7 140.2 Q 158.0 148.0 163.1 154.2 L 177.1 171.2 Q 186.0 182.0 190.8 195.2 L 195.2 207.2 Q 202.0 226.0 200.4 245.9 L 197.8 278.1 Q 196.0 300.0 193.3 319.8 L 192.2 328.1 Q 190.0 344.0 191.2 360.0 L 194.8 408.0 Q 196.0 424.0 194.7 439.9 L 189.1 508.0 Q 188.0 522.0 187.2 536.0 L 184.6 582.0 Q 184.0 592.0 186.3 601.7 L 189.7 616.3 Q 192.0 626.0 200.1 631.8 L 208.6 637.9 Q 220.0 646.0 206.4 649.1 L 165.6 658.4 Q 150.0 662.0 139.2 658.4 L 136.8 657.6 Q 126.0 654.0 125.7 642.0 L 124.3 590.0 Q 124.0 580.0 124.3 570.0 L 125.6 526.0 Q 126.0 514.0 125.1 502.0 L 121.1 446.0 Q 120.0 430.0 127.0 415.6 L 138.4 391.8 Q 148.0 372.0 140.6 351.3 L 132.0 327.0 Q 126.0 310.0 124.5 292.1 L 121.3 251.9 Q 120.0 236.0 125.8 221.1 L 133.6 201.2 Q 138.0 190.0 139.8 178.1 L 142.8 157.9 Q 144.0 150.0 140.8 142.7 L 127.6 112.8 Q 122.0 100.0 123.0 86.0 L 124.6 63.9 Q 126.0 44.0 136.8 33.2 L 139.2 30.8 Z";
-
-export function PoseGuide({ variant, state = "idle" }: { variant: "front" | "side"; state?: GuideState }) {
   return (
     <svg
       className={`pose-guide pose-guide--${state}`}
-      viewBox="-30 -20 360 740"
+      viewBox={GUIDE_VIEWBOX}
       preserveAspectRatio="xMidYMid meet"
       aria-hidden="true"
     >
-      <path className="pose-guide-path" d={variant === "front" ? FRONT_OUTLINE : SIDE_OUTLINE} />
+      {paths.map((d, i) => (
+        <path key={i} className="pose-guide-path" d={d} />
+      ))}
     </svg>
   );
 }
