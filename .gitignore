@@ -14,3 +14,4 @@ backend/models/*.tflite
 example_picture.jpg
 body_outline_example.webp
 arrows_example.png
+body_shapes/
