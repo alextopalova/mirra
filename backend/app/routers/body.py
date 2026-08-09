@@ -8,13 +8,22 @@ for problems the *shopper* can fix by retaking a photo (no person detected,
 body cropped out of frame, an anatomically implausible measurement). A bare
 500 here would leave the kiosk showing a generic error with no guidance, so
 those are caught and turned into a 422 with a shopper-facing `detail`
-message. The same treatment applies to a photo payload that isn't decodable
-at all (corrupt bytes, not an image, malformed base64) -- those are also
-retake-able problems, not server bugs.
+message. The same treatment applies to a `frontPhoto` payload that isn't
+decodable at all (corrupt bytes, not an image, malformed base64) -- that's
+also a retake-able problem, not a server bug.
+
+`sidePhoto` is different: it's optional by product spec (the kiosk capture
+screen has a "Skip side" button, and `measure_from_images` accepts
+`side_bgr=None` and just skips the torso-depth refinement). Failing an
+entire scan because the *optional* side photo was corrupt would block a
+shopper from a scan that could otherwise succeed, so an undecodable
+`sidePhoto` degrades gracefully: it's treated as absent (logged, not
+raised) and the analysis proceeds front-only.
 """
 
 import base64
 import binascii
+import logging
 from typing import Optional
 
 import cv2
@@ -24,6 +33,8 @@ from pydantic import BaseModel
 
 from app.cv.classify import classify
 from app.cv.measure import measure_from_images
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -81,7 +92,20 @@ def _decode(dataurl: str, field: str):
 @router.post("/analyze-body")
 def analyze_body(inp: AnalyzeIn):
     front = _decode(inp.frontPhoto, "frontPhoto")
-    side = _decode(inp.sidePhoto, "sidePhoto") if inp.sidePhoto else None
+
+    side = None
+    if inp.sidePhoto:
+        try:
+            side = _decode(inp.sidePhoto, "sidePhoto")
+        except HTTPException:
+            # sidePhoto is optional -- an unusable one degrades to "not
+            # provided" rather than failing the whole scan. See module
+            # docstring for why.
+            logger.warning(
+                "sidePhoto was unusable (undecodable or malformed base64); "
+                "ignoring it and proceeding with front-only analysis."
+            )
+            side = None
 
     try:
         m = measure_from_images(front, side, inp.heightCm, inp.weightKg)

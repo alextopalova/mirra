@@ -76,12 +76,52 @@ def test_analyze_body_422_on_malformed_base64():
     assert r.json()["detail"]
 
 
-def test_analyze_body_422_on_undecodable_side_photo():
-    # The same gaps apply to the optional side photo, not just the front.
+def test_analyze_body_200_on_undecodable_side_photo():
+    # sidePhoto is optional by product spec (kiosk has a "Skip side"
+    # button, and the measurement code accepts side_bgr=None). An unusable
+    # side photo must degrade to front-only analysis, not fail the scan.
     bogus = base64.b64encode(b"still not an image").decode()
     r = client.post("/analyze-body", json={
         "frontPhoto": _dataurl(FIX), "sidePhoto": bogus,
         "heightCm": 170, "weightKg": 62,
     })
-    assert r.status_code == 422
-    assert r.json()["detail"]
+    assert r.status_code == 200
+    body = r.json()
+    assert body["profile"]["fruit"]
+    assert isinstance(body["palette"]["colors"], list)
+
+
+def test_analyze_body_200_on_malformed_base64_side_photo():
+    # Malformed base64 in sidePhoto is the other undecodable case (as
+    # opposed to valid base64 that isn't a real image); it must also
+    # degrade gracefully rather than 422.
+    r = client.post("/analyze-body", json={
+        "frontPhoto": _dataurl(FIX),
+        "sidePhoto": "data:image/jpeg;base64,not-valid-base64!!!",
+        "heightCm": 170, "weightKg": 62,
+    })
+    assert r.status_code == 200
+    assert r.json()["profile"]["fruit"]
+
+
+def test_analyze_body_front_only_path_still_used_when_side_photo_unusable(monkeypatch):
+    # Confirm the analysis genuinely proceeds front-only (side_bgr=None),
+    # not that some empty/short-circuited response is returned.
+    seen = {}
+    real_measure = body_router.measure_from_images
+
+    def _spy(front_bgr, side_bgr, height_cm, weight_kg):
+        seen["side_bgr"] = side_bgr
+        return real_measure(front_bgr, side_bgr, height_cm, weight_kg)
+
+    monkeypatch.setattr(body_router, "measure_from_images", _spy)
+
+    bogus = base64.b64encode(b"still not an image").decode()
+    r = client.post("/analyze-body", json={
+        "frontPhoto": _dataurl(FIX), "sidePhoto": bogus,
+        "heightCm": 170, "weightKg": 62,
+    })
+
+    assert r.status_code == 200
+    assert seen["side_bgr"] is None
+    assert r.json()["profile"]["fruit"]
