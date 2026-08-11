@@ -77,6 +77,14 @@ SEGMENTER_MODEL_PATH = _MODELS_DIR / "selfie_segmenter.tflite"
 # PoseLandmark enum.
 NOSE = 0
 L_SHOULDER, R_SHOULDER = 11, 12
+# The arm chain, used to tell a torso silhouette apart from a torso with an
+# arm fused to it (see _row_is_arm_contaminated).
+L_ELBOW, R_ELBOW = 13, 14
+L_WRIST, R_WRIST = 15, 16
+# The hand continues below the wrist, and in a hands-on-hips pose it is the
+# hand -- not the wrist -- that sits at hip height. The chain has to reach
+# the fingertips or the rows that matter most go unconstrained.
+L_INDEX, R_INDEX = 19, 20
 L_HIP, R_HIP = 23, 24
 L_ANKLE, R_ANKLE = 27, 28
 
@@ -124,7 +132,15 @@ _WAIST_BAND_FRAC = (0.50, 1.00)
 # unreachable downstream (see classify.py). Keeping the band's lower edge
 # at 1.02 stays clear of the artefact while still covering the true
 # widest-point-of-the-hips region just below the hip joint landmarks.
-_HIP_BAND_FRAC = (0.90, 1.02)
+# Now that arm-contaminated rows are detected and skipped outright (see
+# _row_is_arm_contaminated), the band no longer has to hide from the
+# hand-rejoins-the-silhouette artefact described above, and can cover the
+# whole region where the true widest point of the hips actually falls --
+# which is some way below the hip joint landmarks. Rows where a hand or
+# forearm is fused to the hip are rejected on their own merits instead of
+# being dodged by a lucky choice of band edges, which is what made a
+# hands-on-hips pose measure ~60% too wide.
+_HIP_BAND_FRAC = (0.90, 1.25)
 _BAND_SAMPLES = 25
 # When taking a band's "max" (or "min") width, a single anomalous row --
 # a stray segmentation artefact, a hand/arm brushing back into the band,
@@ -137,6 +153,9 @@ _BAND_SAMPLES = 25
 # mask in tests). 90/10 tolerates roughly the top/bottom decile of sampled
 # rows being outliers without being swayed by them.
 _BAND_EXTREME_PERCENTILE = 90
+# Below this, an arm landmark is treated as "not seen" rather than as a
+# position: see _arm_x_at.
+_ARM_VISIBILITY_MIN = 0.5
 
 
 @dataclass(frozen=True)
@@ -316,6 +335,34 @@ def _resolve_person_label(
     return int(vals[np.argmax(counts)])
 
 
+def _row_contiguous_span(
+    mask: np.ndarray, label: int, y: float, cx: float
+) -> Optional[tuple[int, int]]:
+    """The inclusive [left, right] column bounds of the contiguous run of
+    `label` on row `y` through `cx`, or None if `cx` isn't on the body.
+
+    Split out from `_row_contiguous_width` because the arm-contamination
+    test needs the run's actual edges: when one arm is fused and the other
+    isn't, the run is markedly asymmetric about the centerline, and a
+    symmetric width/2 approximation puts both edges in the wrong place.
+    """
+    h, w = mask.shape
+    yi = int(round(y))
+    if not (0 <= yi < h):
+        return None
+    row = mask[yi]
+    cxi = int(round(cx))
+    if not (0 <= cxi < w) or row[cxi] != label:
+        return None
+    left = cxi
+    while left - 1 >= 0 and row[left - 1] == label:
+        left -= 1
+    right = cxi
+    while right + 1 < w and row[right + 1] == label:
+        right += 1
+    return left, right
+
+
 def _row_contiguous_width(mask: np.ndarray, label: int, y: float, cx: float) -> float:
     """Width, in pixels, of the contiguous run of `label` pixels on row `y`
     that contains column `cx`.
@@ -329,21 +376,76 @@ def _row_contiguous_width(mask: np.ndarray, label: int, y: float, cx: float) -> 
     the arm is pressed flat against the body), starting from the center and
     expanding outward until the first background pixel isolates the torso.
     """
-    h, w = mask.shape
-    yi = int(round(y))
-    if not (0 <= yi < h):
+    span = _row_contiguous_span(mask, label, y, cx)
+    if span is None:
         return 0.0
-    row = mask[yi]
-    cxi = int(round(cx))
-    if not (0 <= cxi < w) or row[cxi] != label:
-        return 0.0
-    left = cxi
-    while left - 1 >= 0 and row[left - 1] == label:
-        left -= 1
-    right = cxi
-    while right + 1 < w and row[right + 1] == label:
-        right += 1
+    left, right = span
     return float(right - left + 1)
+
+
+def _arm_x_at(lms: Sequence[Landmark], y: float, side: str) -> Optional[float]:
+    """x of the arm's centerline at height `y`, or None if the arm doesn't
+    span that height.
+
+    Interpolates along the shoulder -> elbow -> wrist -> fingertip chain.
+    Returns None above the shoulder or below the fingertips: past the hand
+    there is no arm to confuse the torso with, and extrapolating the chain
+    there would invent a constraint out of nothing.
+    """
+    chain = (
+        (lms[L_SHOULDER], lms[L_ELBOW], lms[L_WRIST], lms[L_INDEX])
+        if side == "left"
+        else (lms[R_SHOULDER], lms[R_ELBOW], lms[R_WRIST], lms[R_INDEX])
+    )
+    for a, b in zip(chain, chain[1:]):
+        # An arm the model couldn't actually see (occluded, out of frame,
+        # or behind the body) gets placeholder coordinates that can land
+        # anywhere -- including on the torso, where they would veto every
+        # row and leave the band with nothing to measure. No confident
+        # landmark, no constraint.
+        if min(a.visibility, b.visibility) < _ARM_VISIBILITY_MIN:
+            continue
+        lo, hi = (a, b) if a.y <= b.y else (b, a)
+        if lo.y <= y <= hi.y:
+            span = hi.y - lo.y
+            t = 0.0 if span <= 0 else (y - lo.y) / span
+            return lo.x + t * (hi.x - lo.x)
+    return None
+
+
+def _row_is_arm_contaminated(
+    left: float, right: float, cx: float, y: float, lms: Sequence[Landmark]
+) -> bool:
+    """Whether the contiguous run [left, right] has an arm fused into it.
+
+    `_row_contiguous_width` isolates the torso by expanding from the body
+    centerline until it hits background, which works only while there is a
+    gap between arm and torso. In a hands-on-hips or hands-in-pockets pose
+    there is no gap at hip height, and the run silently becomes
+    torso-plus-forearm-plus-hand -- on the example photo that read the hips
+    ~60% too wide and turned an hourglass into a pear.
+
+    A run that has swallowed an arm necessarily extends to or past that
+    arm's centerline, so that's the test. It needs no threshold tuning and
+    it fails safe: with no elbow/wrist landmarks at this height (arms
+    raised, or the row below the fingertips) there is no constraint and the
+    row is accepted.
+
+    Which side of the image an arm falls on is decided per row by comparing
+    it to the body centerline `cx`, never assumed from the landmark's
+    left/right name: a mirrored preview (which this kiosk uses) swaps them,
+    and hard-coding the convention would silently disable the check on one
+    side.
+    """
+    for side in ("left", "right"):
+        ax = _arm_x_at(lms, y, side)
+        if ax is None:
+            continue
+        if ax >= cx and right >= ax:
+            return True
+        if ax < cx and left <= ax:
+            return True
+    return False
 
 
 def _band_extreme(
@@ -354,6 +456,7 @@ def _band_extreme(
     cx_at,
     mode: str,
     n_samples: int = _BAND_SAMPLES,
+    lms: Optional[Sequence[Landmark]] = None,
 ) -> float:
     """Max or min contiguous silhouette width sampled across rows y0..y1
     (inclusive, order-independent). Rows with no on-body pixel at the
@@ -372,10 +475,28 @@ def _band_extreme(
     """
     lo, hi = (y0, y1) if y0 <= y1 else (y1, y0)
     widths = []
+    clean = []
     for y in np.linspace(lo, hi, n_samples):
-        wpx = _row_contiguous_width(mask, label, y, cx_at(y))
-        if wpx > 0:
-            widths.append(wpx)
+        cx = cx_at(y)
+        span = _row_contiguous_span(mask, label, y, cx)
+        if span is None:
+            continue
+        left, right = span
+        width = float(right - left + 1)
+        widths.append(width)
+        # `lms` is optional so the pure-mask unit tests can exercise this
+        # function without a pose.
+        if lms is None or not _row_is_arm_contaminated(left, right, cx, y, lms):
+            clean.append(width)
+
+    # Prefer rows with no arm fused to the torso, but never fail for lack of
+    # them. Some bands are legitimately arm-covered end to end -- at chest
+    # height, arms hanging at the sides touch the torso for the whole bust
+    # band -- and returning nothing there would turn a good photo into a
+    # "retake" prompt. Dropping back to every sampled row restores exactly
+    # the pre-filter behaviour for those bands, which is the best available
+    # evidence rather than no evidence.
+    widths = clean or widths
     if not widths:
         return 0.0
     pct = _BAND_EXTREME_PERCENTILE if mode == "max" else 100 - _BAND_EXTREME_PERCENTILE
@@ -402,12 +523,22 @@ def _measure_silhouette_widths(
         frac = (y - shoulder_y) / torso_span
         return sh_mid_x + frac * (hip_mid_x - sh_mid_x)
 
+    # The shoulder band is measured WITHOUT the arm filter on purpose: at
+    # shoulder height the arm is the deltoid, and it is part of the shoulder
+    # silhouette every dressmaker would measure. Everywhere below, an arm in
+    # the run is contamination.
     shoulder_w = _band_extreme(
         mask, label, y_at(-_SHOULDER_BAND_HALF_FRAC), y_at(_SHOULDER_BAND_HALF_FRAC), cx_at, "max"
     )
-    bust_w = _band_extreme(mask, label, y_at(_BUST_BAND_FRAC[0]), y_at(_BUST_BAND_FRAC[1]), cx_at, "max")
-    waist_w = _band_extreme(mask, label, y_at(_WAIST_BAND_FRAC[0]), y_at(_WAIST_BAND_FRAC[1]), cx_at, "min")
-    hip_w = _band_extreme(mask, label, y_at(_HIP_BAND_FRAC[0]), y_at(_HIP_BAND_FRAC[1]), cx_at, "max")
+    bust_w = _band_extreme(
+        mask, label, y_at(_BUST_BAND_FRAC[0]), y_at(_BUST_BAND_FRAC[1]), cx_at, "max", lms=front_lms
+    )
+    waist_w = _band_extreme(
+        mask, label, y_at(_WAIST_BAND_FRAC[0]), y_at(_WAIST_BAND_FRAC[1]), cx_at, "min", lms=front_lms
+    )
+    hip_w = _band_extreme(
+        mask, label, y_at(_HIP_BAND_FRAC[0]), y_at(_HIP_BAND_FRAC[1]), cx_at, "max", lms=front_lms
+    )
 
     return SilhouetteWidths(shoulder_w=shoulder_w, bust_w=bust_w, waist_w=waist_w, hip_w=hip_w)
 

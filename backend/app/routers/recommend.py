@@ -36,6 +36,14 @@ def recommend(inp: RecommendIn):
         season=inp.palette.season,
     )
     return [
-        {"garment": r["garment"].model_dump(), "score": r["score"], "reasons": r["reasons"]}
+        {
+            "garment": r["garment"].model_dump(),
+            "score": r["score"],
+            "reasons": r["reasons"],
+            # False marks a garment shown to fill a thin rack: it's in the
+            # right category but misses the season or occasion filter. The
+            # kiosk labels these rather than passing them off as matches.
+            "exact": r["exact"],
+        }
         for r in recs
     ]

@@ -3,13 +3,23 @@
 }
 
 .spinner { display: flex; flex-direction: column; align-items: center;
-  justify-content: center; gap: 32px; padding: var(--pad); text-align: center; }
+  justify-content: center; gap: 28px; padding: var(--pad); text-align: center; }
 
 .spinner-ring {
-  width: 84px;
-  height: 84px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
-  border: 6px solid var(--glass-border);
+  border: 5px solid var(--hairline);
   border-top-color: var(--accent);
   animation: spin 0.9s linear infinite;
+}
+
+/* The waiting label is a status, not a screen title — held at body weight
+   so it doesn't outrank the heading of the screen it sits inside. */
+.spinner h2 {
+  font-family: var(--font);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--ink-dim);
+  letter-spacing: 0;
 }

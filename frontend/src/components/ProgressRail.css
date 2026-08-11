@@ -1,0 +1,79 @@
+.rail {
+  flex-shrink: 0;
+  /* Symmetric horizontal padding, and it has to stay symmetric: the track
+     below centres itself inside this box, so clearing the fixed start-over
+     button with a bigger padding-left (as this used to) doesn't move the
+     button out of the way — it moves the whole rail right by half the
+     difference. 88px clears the button (16px offset + 56px wide) on the
+     left and is simply mirrored on the right. */
+  padding: 20px 88px 16px;
+}
+
+.rail-track {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  list-style: none;
+  margin: 0 auto;
+  width: min(100%, 680px);
+}
+
+/* Each step owns the segment of rule to its left, drawn as a ::before so
+   the dots stay evenly spaced regardless of how wide the labels are. */
+.rail-step {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.rail-step::before {
+  content: "";
+  position: absolute;
+  /* Centred on the dot: (dot height - line height) / 2 = (16 - 3) / 2. */
+  top: 6.5px;
+  right: 50%;
+  left: -50%;
+  height: 3px;
+  border-radius: 1.5px;
+  background: var(--hairline);
+}
+.rail-step:first-child::before { display: none; }
+
+.rail-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 2px var(--hairline);
+  position: relative;
+  z-index: 1;
+}
+
+.rail-label { color: var(--ink-mute); }
+
+/* Behind you: filled, and the rule leading up to it filled too, so the
+   distance covered is legible at a glance from across the shop floor. */
+.rail-step--done .rail-dot { background: var(--accent); box-shadow: none; }
+.rail-step--done::before { background: var(--accent); }
+.rail-step--done .rail-label { color: var(--ink-dim); }
+
+/* Where you are: a ring rather than a fill, which reads as "open" against
+   the solid dots behind it. */
+.rail-step--current .rail-dot {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 4px var(--accent-deep);
+}
+.rail-step--current::before { background: var(--accent); }
+.rail-step--current .rail-label { color: var(--ink); font-weight: 700; }
+
+@media (max-width: 720px) {
+  /* Still symmetric — just tighter. The button is the same size at every
+     width, so the clearance can't shrink below it. */
+  .rail { padding-left: 78px; padding-right: 78px; }
+  .rail-step { font-size: 12px; }
+}

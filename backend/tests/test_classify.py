@@ -39,3 +39,26 @@ def test_japanese_weights_sum_to_one_and_summary_present():
     assert abs(sum(p.japanese_weights.values()) - 1.0) < 1e-6
     assert p.japanese in {"straight", "wave", "natural"}
     assert p.summary
+
+
+def test_marked_waist_outranks_a_moderate_shoulder_hip_imbalance():
+    """A strongly defined waist is the dominant signal: shoulders ~10% wider
+    than the hips used to file this as an inverted triangle, because the
+    shoulder/hip gate ran before the waist was ever considered."""
+    p = classify(m(shoulder_w=110, hip_w=100, waist_w=67))
+    assert p.fruit == "hourglass"
+    # ...and symmetrically for hips wider than shoulders.
+    assert classify(m(shoulder_w=90, hip_w=100, waist_w=67)).fruit == "hourglass"
+
+
+def test_marked_waist_does_not_override_a_large_shoulder_hip_imbalance():
+    """Past ~15% the imbalance is the shape, however defined the waist."""
+    assert classify(m(shoulder_w=125, hip_w=100, waist_w=65)).fruit == "inverted-triangle"
+    assert classify(m(shoulder_w=80, hip_w=100, waist_w=65)).fruit == "pear"
+
+
+def test_a_merely_defined_waist_still_defers_to_the_shoulder_hip_gates():
+    """0.71-0.80 is a defined waist but not a marked one, so it decides
+    hourglass-vs-rectangle only once shoulders and hips are balanced."""
+    assert classify(m(shoulder_w=110, hip_w=100, waist_w=78)).fruit == "inverted-triangle"
+    assert classify(m(shoulder_w=100, hip_w=100, waist_w=78)).fruit == "hourglass"

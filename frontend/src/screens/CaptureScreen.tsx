@@ -7,6 +7,7 @@ import { DirectionArrow } from "../components/DirectionArrow";
 import { Spinner } from "../components/Spinner";
 import { useAutoCapture } from "../lib/useAutoCapture";
 import { MIRROR_PREVIEW, computeCoverCrop } from "../lib/poseFit";
+import { USE_MOCKS, mockScanPhoto } from "../api/client";
 import "./capture.css";
 import "./screen.css";
 
@@ -232,6 +233,18 @@ export function CaptureScreen() {
     }
   };
 
+  // Mock mode replaces the backend, but a camera and a pose model can't be
+  // mocked — so without this the flow dead-ends here and mock mode looks
+  // broken even though every API call is being served from mocks. Skipping
+  // stores a stand-in scan (a real head-to-toe model shot, see mocks.ts) so
+  // the fitting room has an actual body to show garments on. Gated on the
+  // same flag as the API mocks, so it cannot appear in a real deployment.
+  const skipScan = () => {
+    const photo = mockScanPhoto();
+    update({ frontPhoto: photo, sidePhoto: photo });
+    go("measurements");
+  };
+
   const heading =
     feedback === "success" ? "Captured!" :
     feedback === "turn" ? "Turn to your side" :
@@ -278,6 +291,11 @@ export function CaptureScreen() {
           {count !== null ? "Hold still" : auto.hint}
         </p>
       ) : null}
+      {USE_MOCKS && (
+        <button className="capture-skip" onClick={skipScan}>
+          Skip scan (mock mode)
+        </button>
+      )}
     </div>
   );
 }

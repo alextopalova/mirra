@@ -1,25 +1,64 @@
 :root {
-  /* Light, greyish-white boutique ground: a quiet cool-grey radial wash,
-     not flat white. Top-left is brightest (near paper white), settling
-     into a soft slate-grey at the edges. */
-  --bg-gradient: radial-gradient(120% 120% at 30% 15%, #FAFBFC 0%, #ECEFF3 55%, #DCE1E8 100%);
-  /* Glass on a light ground needs more opacity than glass on a dark one
-     (translucent white nearly disappears against a light page), plus a
-     visible cool-grey edge and a tight, close shadow to keep panels
-     legible and layered instead of washing out. */
-  --glass-bg: rgba(255, 255, 255, 0.60);
-  --glass-bg-strong: rgba(255, 255, 255, 0.80);
-  --glass-border: rgba(100, 116, 139, 0.30);
-  --glass-blur: 24px;
-  --glass-shadow: 0 8px 28px rgba(30, 41, 59, 0.12), 0 1px 2px rgba(30, 41, 59, 0.06);
-  --accent: #8FB4D9;
-  --accent-strong: #6B96C2;
-  --success: #2E7D4F;
-  --danger: #B3261E;
-  --text: #1E2530;
-  --text-dim: #4A5261;
-  --radius: 28px;
+  /* Cool, near-white retail ground with a whisper of blue in it, so white
+     cards sitting on top read as lifted rather than as holes. The wash is
+     light enough (L* ~97) that ink on it still measures 15:1+. */
+  --bg: radial-gradient(120% 100% at 50% 0%, #FFFFFF 0%, #F4F7FE 55%, #EAF0FC 100%);
+  --paper: #F6F9FE;      /* flat equivalent, for elements that can't take the wash */
+  --surface: #FFFFFF;    /* cards, the rack, the preview mat */
+  --surface-alt: #EEF3FD; /* recessed: keypad keys, empty states, track fills */
+  --hairline: #DEE6F5;
+
+  /* Measured against --surface (#FFFFFF), the worst case on this screen:
+       --ink       17.4:1
+       --ink-dim    8.6:1
+       --ink-mute   5.1:1  (labels and captions only, never body copy)
+     All clear the 7:1 "preferred" bar for kiosk viewing distance except
+     --ink-mute, which is reserved for large-ish uppercase labels. */
+  --ink: #131A2B;
+  --ink-dim: #4A5468;
+  --ink-mute: #6C778E;
+
+  /* Periwinkle. Blue's dependability with a violet lift that reads fashion
+     rather than finance — and it's a fashion colour in its own right, which
+     matters on a screen that talks about what suits you.
+       --accent       fills, bars, dots, active edges — never carries text
+       --accent-deep  5.5:1 against white, so every control with a white
+                      label passes AA at any size
+       --accent-soft  baby blue, the selected-state tint (research is clear
+                      that baby blue is a background colour, not a text one) */
+  --accent: #7C8CF8;
+  --accent-deep: #4A5BD6;
+  --accent-press: #3B49B4;
+  --accent-soft: #E7ECFE;
+
+  --success: #1F7A54;
+  --danger: #C0362B;
+
+  /* Depth comes from two very soft blue-tinted shadows rather than borders
+     everywhere: a tight one for contact, a wide one for lift. Tinting them
+     toward the accent (instead of neutral black) keeps the whole screen on
+     one temperature. */
+  --shadow-card: 0 1px 2px rgba(19, 26, 43, 0.04), 0 8px 24px rgba(38, 54, 110, 0.06);
+  --shadow-lift: 0 2px 4px rgba(19, 26, 43, 0.05), 0 16px 40px rgba(38, 54, 110, 0.10);
+
+  /* Generously rounded: a 24px card and a fully-rounded control read as
+     touchable, which is the whole vocabulary of a self-service screen. */
+  --radius-lg: 28px;
+  --radius: 22px;
+  --radius-sm: 14px;
+  --radius-pill: 999px;
+
+  /* Kiosk touch guidance is 9–12mm per target with ~5mm between; 72px at
+     typical kiosk pixel density clears the top of that range. */
   --touch: 72px;
   --pad: 32px;
-  --font: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  /* One sans family, differentiated by weight and size rather than by
+     mixing faces. Sans-serif is the kiosk standard — serifs lose character
+     distinction at viewing distance. No webfonts: a kiosk mid-demo must
+     never wait on a font CDN. */
+  --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+  --font-display: ui-sans-serif, -apple-system, BlinkMacSystemFont,
+    "SF Pro Display", "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
 }

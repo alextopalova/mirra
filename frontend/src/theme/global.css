@@ -16,15 +16,12 @@ html {
   /* Kiosk chrome: the app is the whole viewport, never a scrollable page. */
   overflow: hidden;
   overscroll-behavior: none;
-  /* Light theme: tells the UA to render native widgets (scrollbars, form
-     controls, selection) with light-appropriate colors instead of
-     inheriting a dark OS preference. */
   color-scheme: light;
 }
 body {
   font-family: var(--font);
-  color: var(--text);
-  background: var(--bg-gradient);
+  color: var(--ink);
+  background: var(--bg);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   user-select: none;
@@ -43,6 +40,60 @@ body::-webkit-scrollbar { display: none; }
   max-height: 100dvh;
   overflow: hidden;
 }
-h1 { font-size: 56px; font-weight: 700; letter-spacing: -0.02em; }
-h2 { font-size: 34px; font-weight: 600; }
-p { font-size: 22px; color: var(--text-dim); }
+
+/* One family throughout; hierarchy comes from weight, size and tracking.
+   Headings are set tight and heavy — at kiosk viewing distance that reads
+   as confident rather than shouty, and it survives glare better than a
+   light weight would. */
+h1, h2, .display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+h1 { font-size: clamp(38px, 5vw, 68px); }
+h2 { font-size: clamp(26px, 3.2vw, 40px); }
+/* 20px floor: kiosk guidance puts important text at 4mm+ on screen, and
+   body copy here is read standing up, at arm's length or further. */
+p { font-size: 20px; color: var(--ink-dim); line-height: 1.45; }
+
+/* The app's one surface. Every panel on every screen is this: white, deeply
+   rounded, lifted by a soft tinted shadow rather than outlined by a heavy
+   border. Consistency here is what keeps the interface calm while the
+   garments and the palette supply all the colour. */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 1.6vh, 20px);
+  padding: clamp(18px, 2vw, 28px);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  min-width: 0;
+}
+
+/* Small caps-ish orienting label. Used above a region to name it — the one
+   structural device repeated across screens, so it has to stay consistent. */
+.eyebrow {
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+/* Kiosks are touched, not tabbed — but the floor stays: anything focusable
+   shows a real ring when a keyboard is used, and no animation runs for a
+   shopper who has asked the OS for less of it. */
+:focus-visible {
+  outline: 3px solid var(--accent-deep);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

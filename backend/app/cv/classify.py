@@ -1,15 +1,43 @@
 from app.schemas import BodyMeasurements, BodyProfile
 
+# Waist definition is graded, not binary:
+#   <= 0.80  a defined waist -- enough to separate hourglass from rectangle
+#            once shoulders and hips are already known to be balanced.
+#   <= 0.70  a *markedly* defined waist. Standard body-shape rulesets treat
+#            a waist this much narrower than the hips as the dominant
+#            signal, outranking a moderate shoulder-hip imbalance -- so it
+#            is checked before the shoulder/hip gates rather than after
+#            them, which is where a strongly-waisted body used to be filed
+#            as an inverted triangle purely because the shoulders measured
+#            ~10% wider.
+# A rule that overrides another rule has to clear a higher bar than the one
+# it overrides; that is why this threshold is stricter than 0.80 rather
+# than equal to it.
+_DEFINED_WAIST_RATIO = 0.80
+_MARKED_WAIST_RATIO = 0.70
+# ...and only while the imbalance really is moderate. Past +/-15% the
+# shoulder-hip difference is the shape, however defined the waist is.
+_BALANCED_SHOULDER_HIP = (0.85, 1.15)
+
 
 def _fruit(m: BodyMeasurements) -> str:
     shoulder, waist, hip, bust = m.shoulder_w, m.waist_w, m.hip_w, m.bust_w
     whr = waist / hip if hip else 1.0
     sh_hip = shoulder / hip if hip else 1.0
-    defined_waist = whr <= 0.80
+    defined_waist = whr <= _DEFINED_WAIST_RATIO
 
-    # Apple: midsection is the widest point (often with higher BMI).
+    # Apple: midsection is the widest point (often with higher BMI). Stays
+    # first -- a waist that IS the widest point can't also be a marked one.
     if waist >= hip and waist >= bust and m.bmi >= 26:
         return "apple"
+
+    # A markedly defined waist on a moderately balanced frame is an
+    # hourglass regardless of which of shoulders/hips is the wider.
+    if whr <= _MARKED_WAIST_RATIO and (
+        _BALANCED_SHOULDER_HIP[0] <= sh_hip <= _BALANCED_SHOULDER_HIP[1]
+    ):
+        return "hourglass"
+
     if sh_hip >= 1.07:
         return "inverted-triangle"
     if sh_hip <= 0.93:

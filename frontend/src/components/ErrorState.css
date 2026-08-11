@@ -1,6 +1,2 @@
-.error-state-heading {
-  color: var(--danger);
-}
-.error-state-message {
-  color: var(--text-dim);
-}
+.error-state-heading { color: var(--danger); }
+.error-state-message { color: var(--ink-dim); max-width: 46ch; }

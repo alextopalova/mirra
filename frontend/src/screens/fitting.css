@@ -1,0 +1,210 @@
+.fitting { text-align: left; }
+.fitting-title { flex-shrink: 0; font-size: clamp(28px, 3.4vw, 44px); }
+
+/* Preview left, rack right. The preview is a fixed share so the rack gets
+   every remaining pixel — the rack is what the shopper scans. */
+.fitting-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(240px, 27%) 1fr;
+  gap: clamp(16px, 2vw, 32px);
+}
+
+/* ---- preview ---- */
+
+.preview { display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: clamp(14px, 1.4vw, 20px); }
+
+.preview-frame {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--surface-alt);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+/* `contain`, not `cover`: this is the shopper's own body and a garment on
+   it — cropping either to fill a box is the one thing this panel must not
+   do. The tinted ground behind it is a deliberate mat, not dead space. */
+.preview-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.preview-empty { position: absolute; inset: 0; display: grid; place-items: center;
+  padding: 24px; text-align: center; font-size: 16px; color: var(--ink-mute); }
+
+.preview-busy {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+/* Names what's on screen, because "your scan" and "you in the dress" look
+   similar at a glance and the difference matters. */
+.preview-tag {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.preview-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.preview-name { font-size: clamp(17px, 1.5vw, 20px); font-weight: 700; color: var(--ink); }
+.preview-price { font-size: clamp(17px, 1.5vw, 20px); color: var(--ink-dim); white-space: nowrap; }
+/* The "why this suits you" line lives here rather than on every card — it's
+   only worth reading for the garment actually under consideration. */
+.preview-reason { font-size: 15px; color: var(--ink-mute); line-height: 1.35; }
+.preview-error { font-size: 15px; color: var(--danger); }
+
+.preview-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.preview-actions { display: flex; gap: 10px; }
+.preview-actions .btn { flex: 1; padding: 0 12px; font-size: 18px; min-height: 64px; }
+
+/* ---- rack ---- */
+
+.rack { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+
+.filters { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
+.chips { display: flex; gap: 10px; flex-wrap: wrap; }
+.chip {
+  min-height: 56px;
+  padding: 0 24px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font);
+  font-size: 17px;
+  font-weight: 600;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  color: var(--ink-dim);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.chip:hover { border-color: var(--accent); color: var(--ink); }
+/* The selected chip is the one solid periwinkle on the screen besides the
+   primary button — unmistakable at a glance, and white-on-deep so it stays
+   readable at any size. */
+.chip.is-active {
+  background: var(--accent-deep);
+  border-color: transparent;
+  color: #FFFFFF;
+}
+.chip:first-letter { text-transform: uppercase; }
+
+.rack-note { font-size: 14px; color: var(--ink-mute); flex-shrink: 0; }
+.rack-empty { font-size: 18px; color: var(--ink-dim); padding: 24px 0; }
+
+.rack-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: clamp(12px, 1.2vw, 18px);
+  align-content: start;
+  padding: 2px 2px 6px;
+}
+.rack-list::-webkit-scrollbar { display: none; }
+
+.rack-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* The image IS the card: full width, 3:4, rounded to the card radius. The
+   selected state is a periwinkle ring around the image rather than a tint
+   behind the text, so the thing being selected is visibly the garment. */
+.rack-card-frame {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface-alt);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.15s ease, transform 0.12s ease;
+}
+.rack-card:hover .rack-card-frame { box-shadow: var(--shadow-lift); transform: translateY(-2px); }
+.rack-card.is-selected .rack-card-frame {
+  box-shadow: 0 0 0 3px var(--accent-deep), var(--shadow-lift);
+}
+
+.rack-card-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Both badges sit on the image so the foot stays down to name and price. */
+.rack-card-match {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 5px 11px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.93);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-deep);
+}
+.rack-card-near {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  padding: 5px 11px;
+  border-radius: var(--radius-pill);
+  background: rgba(19, 26, 43, 0.62);
+  font-size: 12px;
+  font-weight: 600;
+  color: #FFFFFF;
+}
+
+.rack-card-foot { display: flex; flex-direction: column; gap: 2px; padding: 0 4px; min-width: 0; }
+.rack-card-name {
+  font-size: clamp(15px, 1.2vw, 17px);
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.25;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+.rack-card-price { font-size: 15px; color: var(--ink-dim); }
+
+/* A kiosk screen is portrait, and portrait wants the preview stacked above
+   the rack, not squeezed into a 27% column beside it. Keyed on orientation
+   rather than width so it applies to a 1080x1920 kiosk (far wider than any
+   width breakpoint) as well as to a phone.
+
+   Both rows are bounded and the rack scrolls inside its own row, so the
+   page itself still never scrolls — the shopper's hand stays in the lower
+   half of the screen, which is the reachable half. */
+@media (orientation: portrait) {
+  .fitting-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 44vh) minmax(0, 1fr);
+    gap: clamp(14px, 2vh, 24px);
+  }
+  .preview { flex-direction: row; align-items: stretch; gap: clamp(14px, 2vw, 24px); }
+  .preview-frame { flex: 0 0 46%; }
+  /* Beside the preview the details column takes the rest, with the two
+     actions pushed to its foot. */
+  .preview-body { flex: 1; }
+  .preview-actions { margin-top: auto; }
+  .rack-list { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+}
+
+/* Narrow phone-ish widths in landscape still need the stack. */
+@media (max-width: 860px) and (orientation: landscape) {
+  .fitting-body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 40vh) minmax(0, 1fr); }
+}

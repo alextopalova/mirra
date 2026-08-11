@@ -7,6 +7,7 @@
     "price": 1650,
     "color_hex": "#31302E",
     "season_tags": [
+      "winter",
       "autumn"
     ],
     "silhouette": {
@@ -16,6 +17,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "date night",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 3 \u00b7 Dresses",
@@ -50,6 +52,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "date night",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 3 \u00b7 Dresses",
@@ -83,6 +86,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "date night",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 3 \u00b7 Dresses",
@@ -116,7 +120,8 @@
       "waist": "regular"
     },
     "occasion_tags": [
-      "everyday"
+      "date night",
+      "wedding guest"
     ],
     "location": "Women's \u00b7 Aisle 3 \u00b7 Dresses",
     "sizes_in_stock": [
@@ -140,7 +145,8 @@
     "price": 2210,
     "color_hex": "#908E86",
     "season_tags": [
-      "spring"
+      "summer",
+      "autumn"
     ],
     "silhouette": {
       "structured": false,
@@ -172,7 +178,8 @@
     "price": 1980,
     "color_hex": "#19191A",
     "season_tags": [
-      "winter"
+      "winter",
+      "summer"
     ],
     "silhouette": {
       "structured": false,
@@ -181,7 +188,8 @@
       "waist": "regular"
     },
     "occasion_tags": [
-      "date night"
+      "date night",
+      "everyday"
     ],
     "location": "Women's \u00b7 Aisle 3 \u00b7 Dresses",
     "sizes_in_stock": [
@@ -248,6 +256,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "date night",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 3 \u00b7 Dresses",
@@ -273,7 +282,7 @@
     "price": 2130,
     "color_hex": "#DBD8D2",
     "season_tags": [
-      "spring"
+      "summer"
     ],
     "silhouette": {
       "structured": false,
@@ -282,6 +291,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "wedding guest",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 3 \u00b7 Dresses",
@@ -315,7 +325,8 @@
       "waist": "regular"
     },
     "occasion_tags": [
-      "date night"
+      "date night",
+      "wedding guest"
     ],
     "location": "Women's \u00b7 Aisle 3 \u00b7 Dresses",
     "sizes_in_stock": [
@@ -349,6 +360,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "date night",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 3 \u00b7 Dresses",
@@ -404,7 +416,8 @@
     "price": 1610,
     "color_hex": "#FED9D2",
     "season_tags": [
-      "spring"
+      "spring",
+      "summer"
     ],
     "silhouette": {
       "structured": false,
@@ -413,6 +426,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "wedding guest",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 3 \u00b7 Dresses",
@@ -437,7 +451,7 @@
     "price": 750,
     "color_hex": "#B0D0B1",
     "season_tags": [
-      "summer"
+      "spring"
     ],
     "silhouette": {
       "structured": false,
@@ -480,6 +494,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "work",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 2 \u00b7 Tops",
@@ -504,7 +519,7 @@
     "price": 700,
     "color_hex": "#E4DCD8",
     "season_tags": [
-      "spring"
+      "summer"
     ],
     "silhouette": {
       "structured": false,
@@ -513,7 +528,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
-      "wedding guest"
+      "everyday"
     ],
     "location": "Women's \u00b7 Aisle 2 \u00b7 Tops",
     "sizes_in_stock": [
@@ -578,6 +593,8 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "work",
+      "date night",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 2 \u00b7 Tops",
@@ -644,6 +661,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "date night",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 2 \u00b7 Tops",
@@ -669,6 +687,7 @@
     "price": 510,
     "color_hex": "#322E2E",
     "season_tags": [
+      "winter",
       "autumn"
     ],
     "silhouette": {
@@ -678,6 +697,8 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "work",
+      "date night",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 2 \u00b7 Tops",
@@ -710,6 +731,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "date night",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 2 \u00b7 Tops",
@@ -733,7 +755,8 @@
     "price": 580,
     "color_hex": "#E3C4B1",
     "season_tags": [
-      "spring"
+      "spring",
+      "autumn"
     ],
     "silhouette": {
       "structured": false,
@@ -742,7 +765,8 @@
       "waist": "regular"
     },
     "occasion_tags": [
-      "wedding guest"
+      "work",
+      "everyday"
     ],
     "location": "Women's \u00b7 Aisle 2 \u00b7 Tops",
     "sizes_in_stock": [
@@ -765,7 +789,7 @@
     "price": 540,
     "color_hex": "#BBFAB9",
     "season_tags": [
-      "summer"
+      "spring"
     ],
     "silhouette": {
       "structured": false,
@@ -774,6 +798,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "date night",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 2 \u00b7 Tops",
@@ -798,7 +823,8 @@
     "price": 460,
     "color_hex": "#D8D2BC",
     "season_tags": [
-      "spring"
+      "spring",
+      "autumn"
     ],
     "silhouette": {
       "structured": true,
@@ -807,6 +833,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "work",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 2 \u00b7 Tops",
@@ -832,6 +859,7 @@
     "price": 1020,
     "color_hex": "#2E2526",
     "season_tags": [
+      "winter",
       "autumn"
     ],
     "silhouette": {
@@ -841,6 +869,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "date night",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 2 \u00b7 Tops",
@@ -874,6 +903,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "date night",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 2 \u00b7 Tops",
@@ -907,6 +937,7 @@
       "waist": "defined"
     },
     "occasion_tags": [
+      "work",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 5 \u00b7 Pants",
@@ -995,7 +1026,7 @@
     "price": 1450,
     "color_hex": "#792348",
     "season_tags": [
-      "autumn"
+      "winter"
     ],
     "silhouette": {
       "structured": false,
@@ -1029,7 +1060,8 @@
     "price": 1070,
     "color_hex": "#221B19",
     "season_tags": [
-      "autumn"
+      "autumn",
+      "winter"
     ],
     "silhouette": {
       "structured": true,
@@ -1038,6 +1070,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "work",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 5 \u00b7 Pants",
@@ -1061,7 +1094,8 @@
     "price": 1470,
     "color_hex": "#DCD7C5",
     "season_tags": [
-      "spring"
+      "spring",
+      "autumn"
     ],
     "silhouette": {
       "structured": true,
@@ -1070,6 +1104,7 @@
       "waist": "regular"
     },
     "occasion_tags": [
+      "work",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 5 \u00b7 Pants",
@@ -1127,6 +1162,7 @@
     "price": 1550,
     "color_hex": "#E6B1B8",
     "season_tags": [
+      "summer",
       "spring"
     ],
     "silhouette": {
@@ -1136,6 +1172,7 @@
       "waist": "defined"
     },
     "occasion_tags": [
+      "work",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 5 \u00b7 Pants",
@@ -1159,7 +1196,8 @@
     "price": 640,
     "color_hex": "#0DD0CF",
     "season_tags": [
-      "summer"
+      "summer",
+      "winter"
     ],
     "silhouette": {
       "structured": false,
@@ -1223,6 +1261,7 @@
     "price": 1370,
     "color_hex": "#10BCCD",
     "season_tags": [
+      "winter",
       "summer"
     ],
     "silhouette": {
@@ -1232,7 +1271,7 @@
       "waist": "high"
     },
     "occasion_tags": [
-      "wedding guest"
+      "everyday"
     ],
     "location": "Women's \u00b7 Aisle 5 \u00b7 Pants",
     "sizes_in_stock": [
@@ -1255,7 +1294,8 @@
     "price": 1110,
     "color_hex": "#715A64",
     "season_tags": [
-      "autumn"
+      "winter",
+      "summer"
     ],
     "silhouette": {
       "structured": false,
@@ -1297,6 +1337,7 @@
       "waist": "defined"
     },
     "occasion_tags": [
+      "work",
       "everyday"
     ],
     "location": "Women's \u00b7 Aisle 5 \u00b7 Pants",

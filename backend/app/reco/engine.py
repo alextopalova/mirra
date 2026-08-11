@@ -11,6 +11,7 @@ from app.reco.scorers import (
     body_score,
     color_score,
     occasion_score,
+    season_matches,
     season_score,
 )
 from app.schemas import BodyProfile
@@ -29,6 +30,12 @@ _MAX_REASONS = 2
 # contract is ever loosened.
 _FALLBACK_REASON = "A strong match for you"
 
+# How many garments the fitting room should always have to show. Four fills
+# the rail beside the try-on preview without scrolling; below that the
+# screen looks like the recommendation failed rather than like the store is
+# genuinely thin on, say, Autumn wedding-guest dresses.
+_MIN_RESULTS = 4
+
 
 def _color_match_reason(season: str | None) -> str:
     return f"{season} palette match" if season else "Your palette match"
@@ -41,16 +48,30 @@ def rank(
     occasion: str,
     catalog: list[Garment],
     season: str | None = None,
+    min_results: int = _MIN_RESULTS,
 ) -> list[dict]:
     """Score and rank the catalog's garments in `category` for this shopper.
 
-    Returns a list of `{"garment": Garment, "score": float, "reasons":
-    list[str]}` dicts, sorted by score descending. A `category` that
-    matches nothing in the catalog yields an empty list rather than an
-    error -- callers (the /recommend route) rely on this to return 200
-    with an empty array instead of failing.
+    Season and occasion are FILTERS, not just scoring terms: a shopper who
+    picks "work" is asking to see work clothes, and a rack that merely
+    reorders the same 13 items reads as broken. Each result carries
+    `"exact": True` when the garment matches both, so the kiosk can label
+    the near-matches it falls back to.
+
+    That fallback is the other half of the contract: with 40 garments split
+    across 3 categories, 4 seasons and 4 occasions, some combinations have
+    only one or two exact matches. Rather than show an empty rail, the best
+    remaining garments in the category fill up to `min_results`, flagged
+    `"exact": False` so the screen can say so plainly.
+
+    Returns `{"garment": Garment, "score": float, "reasons": list[str],
+    "exact": bool}` dicts, exact matches first and each group sorted by
+    score descending. A `category` matching nothing yields an empty list
+    rather than an error -- callers (the /recommend route) rely on this to
+    return 200 with an empty array instead of failing.
     """
-    out = []
+    exact: list[dict] = []
+    near: list[dict] = []
     for g in catalog:
         if g.category != category:
             continue
@@ -78,7 +99,12 @@ def rank(
             reasons.insert(0, _color_match_reason(season))
         reasons = reasons[:_MAX_REASONS] or [_FALLBACK_REASON]
 
-        out.append({"garment": g, "score": score, "reasons": reasons})
+        is_exact = season_matches(g, season) and occasion in g.occasion_tags
+        rec = {"garment": g, "score": score, "reasons": reasons, "exact": is_exact}
+        (exact if is_exact else near).append(rec)
 
-    out.sort(key=lambda r: r["score"], reverse=True)
-    return out
+    exact.sort(key=lambda r: r["score"], reverse=True)
+    near.sort(key=lambda r: r["score"], reverse=True)
+
+    shortfall = max(0, min_results - len(exact))
+    return exact + near[:shortfall]

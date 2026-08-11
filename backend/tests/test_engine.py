@@ -126,10 +126,50 @@ def test_rank_season_changes_the_ordering():
     assert "winter" in [t.lower() for t in winter_top["garment"].season_tags]
 
 
-def test_rank_rack_never_goes_empty_for_a_single_season_shopper():
-    # Soft penalty, not a hard filter: every dress in the catalog should
-    # still appear for any given season, just ranked lower if off-season.
+def test_rank_filters_to_the_shoppers_season_and_occasion():
+    # Season and occasion are hard filters now: an Autumn shopper asking for
+    # everyday dresses must not be shown Winter-only pieces as if they
+    # matched. Anything that survives is either a genuine match or is
+    # explicitly flagged as a near-match (see the next test).
     cat = load_catalog()
-    all_dresses = {g.id for g in cat if g.category == "dress"}
     recs = rank(_p(), [[45, 12, 22]], "dress", "everyday", cat, season="Autumn")
-    assert {r["garment"].id for r in recs} == all_dresses
+    for r in recs:
+        if not r["exact"]:
+            continue
+        g = r["garment"]
+        assert not g.season_tags or "autumn" in [t.lower() for t in g.season_tags]
+        assert "everyday" in g.occasion_tags
+
+
+def test_rank_exact_matches_come_before_near_matches():
+    cat = load_catalog()
+    recs = rank(_p(), [[45, 12, 22]], "dress", "everyday", cat, season="Autumn")
+    flags = [r["exact"] for r in recs]
+    assert flags == sorted(flags, reverse=True)
+
+
+def test_rank_backfills_a_thin_rack_rather_than_returning_almost_nothing():
+    # "Wedding guest" + a season is the thinnest realistic combination in a
+    # 40-piece catalog. The shopper must still get a rack to look at, and
+    # every backfilled piece must be labelled as a near-match rather than
+    # passed off as a hit.
+    cat = load_catalog()
+    recs = rank(_p(), [[45, 12, 22]], "dress", "wedding guest", cat, season="Autumn")
+    dresses = [g for g in cat if g.category == "dress"]
+    assert len(recs) >= min(4, len(dresses))
+    exact_ids = {r["garment"].id for r in recs if r["exact"]}
+    for r in recs:
+        if r["garment"].id not in exact_ids:
+            assert r["exact"] is False
+
+
+def test_rank_matches_a_twelve_season_name_against_plain_catalog_tags():
+    # The colour analysis returns names like "Soft Summer"; catalog tags are
+    # always the plain family. Comparing the two strings directly filed
+    # every 12-season shopper as off-season for the entire catalog.
+    cat = load_catalog()
+    recs = rank(_p(), [[45, 12, 22]], "dress", "everyday", cat, season="Soft Summer")
+    assert any(r["exact"] for r in recs)
+    for r in recs:
+        if r["exact"] and r["garment"].season_tags:
+            assert "summer" in [t.lower() for t in r["garment"].season_tags]

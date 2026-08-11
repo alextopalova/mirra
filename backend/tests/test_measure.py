@@ -416,3 +416,75 @@ def test_get_segmenter_raises_on_missing_model(monkeypatch, tmp_path):
     monkeypatch.setattr(measure_mod, "_segmenter_singleton", None)
     with pytest.raises(FileNotFoundError, match="scripts_setup_model.sh"):
         measure_mod._get_segmenter()
+
+
+# ---------------------------------------------------------------------------
+# Arm contamination: a hands-on-hips pose fuses the forearm into the torso
+# ---------------------------------------------------------------------------
+
+def _arm_landmarks(base, side, elbow, wrist, index):
+    """Attach one arm chain (elbow/wrist/fingertip) to a synthetic pose."""
+    e, w, i = (13, 15, 19) if side == "left" else (14, 16, 20)
+    base[e], base[w], base[i] = _lm(*elbow), _lm(*wrist), _lm(*index)
+    return base
+
+
+def test_arm_x_at_interpolates_along_the_chain_and_stops_at_the_fingertips():
+    from app.cv.measure import _arm_x_at
+
+    lms = _front_landmarks(shoulder_w=90, cx=200)
+    shoulder_y = lms[11].y
+    # Left arm hanging straight down and slightly outward.
+    lms = _arm_landmarks(lms, "left", (150, shoulder_y + 40), (140, shoulder_y + 80),
+                         (138, shoulder_y + 90))
+
+    # Midway between shoulder (x=155) and elbow (x=150).
+    assert _arm_x_at(lms, shoulder_y + 20, "left") == pytest.approx(152.5, abs=0.6)
+    # Above the shoulder and below the fingertips there is no arm to hit.
+    assert _arm_x_at(lms, shoulder_y - 10, "left") is None
+    assert _arm_x_at(lms, shoulder_y + 200, "left") is None
+
+
+def test_row_with_a_hand_resting_on_the_hip_is_rejected_as_arm_contaminated():
+    from app.cv.measure import _row_is_arm_contaminated
+
+    lms = _front_landmarks(shoulder_w=90, hip_w=100, cx=200)
+    hip_y = lms[23].y
+    # Hand sitting on the hip: the fingertip chain passes right through
+    # hip height, well outside the torso.
+    lms = _arm_landmarks(lms, "left", (170, hip_y - 60), (160, hip_y - 5), (158, hip_y + 20))
+
+    # The arm sits at x~159, left of the body centerline (cx=200).
+    # A run whose left edge stops short of it is a clean torso reading...
+    assert _row_is_arm_contaminated(175, 245, 200, hip_y, lms) is False
+    # ...but one that reaches past the arm's centerline has swallowed it.
+    assert _row_is_arm_contaminated(155, 245, 200, hip_y, lms) is True
+
+
+def test_band_extreme_skips_rows_where_an_arm_is_fused_to_the_torso():
+    """The regression this guards: on a hands-on-hips photo every row in the
+    hip band read torso+forearm+hand, measuring the hips ~50% too wide and
+    turning a defined waist into a pear."""
+    from app.cv.measure import _band_extreme
+
+    # Torso 60px wide, plus a 40px "arm" fused onto its right at every row.
+    mask = np.zeros((60, 300), dtype=np.uint8)
+    mask[:, 100:160] = 1          # torso
+    mask[20:40, 160:200] = 1      # arm fused to the torso, rows 20-39
+
+    lms = _front_landmarks(cx=130)
+    lms[11], lms[12] = _lm(100, 0), _lm(160, 0)
+    lms[23], lms[24] = _lm(100, 59), _lm(160, 59)
+    # One arm chain running down the fused region's centerline (x=180); the
+    # other hangs clear on the opposite side so it constrains nothing.
+    lms = _arm_landmarks(lms, "left", (180, 10), (180, 35), (180, 45))
+    lms = _arm_landmarks(lms, "right", (80, 10), (80, 35), (80, 45))
+
+    def cx_at(_y):
+        return 130.0
+
+    # Band spans both fused (20-39) and clean rows, as a real hip band does.
+    # Without the pose, the fused rows win the "max" and inflate the width.
+    assert _band_extreme(mask, 1, 0, 59, cx_at, "max") == pytest.approx(100, abs=1)
+    # With it, those rows are dropped and only the true torso is measured.
+    assert _band_extreme(mask, 1, 0, 59, cx_at, "max", lms=lms) == pytest.approx(60, abs=1)

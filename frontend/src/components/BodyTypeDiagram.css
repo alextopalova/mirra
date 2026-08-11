@@ -1,64 +1,42 @@
-.body-type-diagram { display: flex; flex-direction: column; align-items: center; }
-
-/* Short orientation label for each region — matches the eyebrow style used
-   elsewhere in the report (uppercase, accent-coloured, terse). */
-.btd-label {
-  font-size: 13px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase;
-  color: var(--accent); margin: 0 0 8px;
-}
-
-/* The silhouette floats on the ambient background with a soft accent glow
-   behind it, rather than sitting in its own glass box — it reads as the
-   illustrated centerpiece of this half of the report, not a dashboard card. */
-.btd-figure { position: relative; display: flex; justify-content: center; padding-top: 8px; }
-.btd-figure::before {
-  content: "";
-  position: absolute;
-  top: -8px;
-  width: 200px;
-  height: 220px;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 32%, transparent), transparent 72%);
-  filter: blur(2px);
-  z-index: 0;
-}
-/* The illustration keeps its own bright, designer-chosen colour and sits on
-   a soft neutral surface (not bare on the ambient glow) so it reads as a
-   deliberate card rather than an image pasted onto the background. */
-.btd-illustration-surface {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  padding: 18px 20px 0;
-  border-radius: var(--radius);
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
-}
-
-.btd-illustration {
+/* Illustration beside the verdict, not above it: side by side, the picture
+   reads as evidence for the sentence next to it, and the pair costs half
+   the vertical space of a stacked hero. */
+.shape-head { display: flex; align-items: center; gap: clamp(14px, 1.6vw, 24px); }
+.shape-illustration {
   display: block;
-  width: clamp(130px, 17vw, 200px);
+  width: clamp(84px, 7.5vw, 116px);
   height: auto;
+  flex-shrink: 0;
 }
+.shape-name { font-size: clamp(26px, 2.6vw, 36px); }
+.shape-line { font-size: clamp(15px, 1.3vw, 18px); margin-top: 4px; color: var(--ink-dim); }
 
-.btd-lean { margin-top: 20px; width: min(100%, 300px); }
-.btd-lean-bar {
-  display: flex; gap: 3px; height: 10px; border-radius: 999px;
-  overflow: hidden; background: var(--glass-bg);
+.shape-bone-bar { display: flex; gap: 4px; height: 10px; }
+.shape-bone-seg { display: block; height: 100%; background: var(--surface-alt); border-radius: var(--radius-pill); }
+.shape-bone-seg.is-dominant { background: var(--accent); }
+.shape-bone-caption { font-size: clamp(14px, 1.2vw, 16px); color: var(--ink-dim); margin-top: 8px; }
+.shape-bone-caption strong { color: var(--ink); font-weight: 700; }
+
+/* Two verdicts side by side — "what to wear" only means something against
+   "what not to". */
+.advice { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(14px, 1.6vw, 26px); }
+.advice-head { margin-bottom: 8px; }
+.advice-head--wear { color: var(--accent-deep); }
+
+.advice-list { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+.advice-list li {
+  display: flex;
+  gap: 9px;
+  font-size: clamp(14px, 1.15vw, 16px);
+  line-height: 1.3;
+  color: var(--ink);
 }
-.btd-lean-seg { display: block; height: 100%; background: var(--glass-bg-strong); }
-.btd-lean-seg.is-dominant { background: var(--accent); }
-.btd-lean-caption { margin-top: 10px; font-size: 18px; color: var(--text-dim); }
+.advice-mark { flex-shrink: 0; font-weight: 700; color: var(--ink-mute); }
+.advice-mark--wear { color: var(--accent-deep); }
+/* The skip list is guidance, not a warning — one step back in the
+   hierarchy so it reads as the quieter half of the pair. */
+.advice-skip .advice-list li { color: var(--ink-dim); }
 
-.btd-guidance { margin-top: 20px; display: flex; flex-direction: column; gap: 8px; max-width: 340px; }
-.btd-guidance p { font-size: 19px; line-height: 1.4; color: var(--text-dim); margin: 0; }
-/* .btd-label is a <p> here too — restore the eyebrow style over the
-   ".btd-guidance p" rule above, which otherwise wins on specificity. */
-.btd-guidance p.btd-label { font-size: 13px; color: var(--accent); margin: 0 0 4px; }
-
-@media (max-width: 480px) {
-  .btd-figure::before { width: 160px; height: 180px; }
+@media (max-width: 560px) {
+  .advice { grid-template-columns: 1fr; }
 }

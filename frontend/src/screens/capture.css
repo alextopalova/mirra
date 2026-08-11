@@ -17,10 +17,13 @@
   justify-content: center;
   width: min(92vw, 640px);
   height: 72vh;
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  border: 1px solid var(--glass-border);
-  background: rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-card);
+  /* A tinted mat, not a dark plate: the stage is only ever bare for the
+     moment before the first video frame arrives, and a black rectangle on a
+     light ground reads as a broken screen for exactly as long as it shows. */
+  background: var(--surface-alt);
 }
 
 /* Cover-fills the fixed `.capture-stage` above completely — no empty bands
@@ -66,31 +69,32 @@
 .capture-video-area video.mirrored { transform: scaleX(-1); }
 
 /* This screen is read from several metres away by design (the shopper has
-   to stand back to fit the guide) — every message on it is scaled up from
-   the app's normal type sizes, and pinned to full-contrast --text rather
-   than the dimmer default paragraph colour. */
+   to stand back to fit the guide), so every message on it is scaled well
+   past the app's normal sizes and pinned to full-contrast ink. */
 .capture-heading {
   font-size: clamp(32px, 5vw, 52px);
-  font-weight: 800;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 .capture-hint {
   margin-top: 8px;
   font-size: clamp(22px, 3.6vw, 32px);
-  font-weight: 700;
-  color: var(--text);
+  font-weight: 600;
+  color: var(--ink);
   transition: color 0.2s ease;
 }
-.capture-hint-fit { color: var(--accent); font-weight: 800; }
+/* The "you're framed" state — the deep periwinkle, because this is text on
+   a light ground (5.5:1), not a fill. */
+.capture-hint-fit { color: var(--accent-deep); font-weight: 700; }
+/* Sits directly on live video, so it can't use an ink token: white with a
+   dark shadow is the only pairing that holds over an unknown frame. */
 .capture-countdown { position: absolute; inset: 0; display: flex; align-items: center;
-  justify-content: center; z-index: 2; font-size: clamp(72px, 26vw, 140px); font-weight: 700;
-  color: var(--text); text-shadow: 0 4px 24px rgba(0, 0, 0, 0.5); }
+  justify-content: center; z-index: 2;
+  font-size: clamp(72px, 26vw, 140px); font-weight: 700;
+  color: #FFFFFF; text-shadow: 0 4px 24px rgba(0, 0, 0, 0.6); }
 
-/* Shared "solid panel over the feed" treatment: opaque theme glass (not the
-   light-on-video treatment DirectionArrow/PoseGuide use) because both of
-   these cover the live video with an actual UI panel rather than drawing
-   artwork transparently over it — same reasoning as the restart overlay
-   below.
+/* Shared "solid panel over the feed" treatment, used by both states that
+   replace the video with an actual UI panel rather than drawing over it.
     - `.capture-loading-overlay`: calm "starting up" placeholder shown
       inside the reserved stage while the camera is still spinning up, so
       the space reads as occupied instead of collapsing.
@@ -109,20 +113,16 @@
   gap: 20px;
   padding: var(--pad);
   text-align: center;
-  background: var(--glass-bg-strong);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  /* Fully opaque: both states cover the live feed on purpose — a
+     half-visible person behind an error message is noise, not depth. */
+  background: var(--surface);
 }
-/* This is an error state, not an ordinary prompt — both lines use the
-   --danger token (on the opaque glass panel above, never on raw video, so
-   plain theme-token contrast applies same as ErrorState's heading) so the
-   retry affordance reads as "something went wrong" at a glance, not as a
-   routine action. */
+/* An error state, not an ordinary prompt: both lines use --danger on the
+   opaque panel above (never on raw video), so the retry affordance reads as
+   "something went wrong" at a glance rather than as a routine action. */
 .capture-restart-title {
   font-size: clamp(24px, 3.6vw, 34px);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--danger);
   max-width: 90%;
 }
@@ -132,3 +132,19 @@
   color: var(--danger);
   max-width: 90%;
 }
+
+/* Only rendered when VITE_USE_MOCKS is on (see CaptureScreen). Styled as a
+   plain developer affordance — deliberately not a PrimaryButton, so it can
+   never be mistaken for part of the shopper-facing flow. */
+.capture-skip {
+  margin-top: 4px;
+  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  border: 1px dashed var(--ink-mute);
+  background: none;
+  font-family: var(--font);
+  font-size: 15px;
+  color: var(--ink-mute);
+  cursor: pointer;
+}
+.capture-skip:hover { color: var(--ink); border-color: var(--ink); }

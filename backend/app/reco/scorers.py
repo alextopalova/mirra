@@ -133,6 +133,46 @@ SEASON_NEUTRAL = 0.5  # mirrors color_score's "nothing to compare" neutral
 SEASON_OFF_SEASON_PENALTY = 0.15
 
 
+# The four season families every seasonal-analysis vocabulary reduces to.
+# The colour analysis may return a 12-season name ("Soft Summer", "Deep
+# Autumn"), while catalog tags are always the plain family -- comparing the
+# two strings directly filed every 12-season shopper as off-season for the
+# entire catalog.
+_SEASON_FAMILIES = ("spring", "summer", "autumn", "winter")
+_SEASON_ALIASES = {"fall": "autumn"}
+
+
+def season_family(season: str | None) -> str | None:
+    """The plain season family inside a season name, or None if there isn't one.
+
+    "Soft Summer" -> "summer", "Fall" -> "autumn", "Deep Winter" -> "winter".
+    Returns None for an unrecognised value so callers can treat it as "no
+    season signal" rather than as a mismatch.
+    """
+    if not season:
+        return None
+    s = season.strip().lower()
+    for alias, family in _SEASON_ALIASES.items():
+        if alias in s:
+            return family
+    for family in _SEASON_FAMILIES:
+        if family in s:
+            return family
+    return None
+
+
+def season_matches(g: Garment, season: str | None) -> bool:
+    """Whether a garment belongs to the shopper's season family.
+
+    An untagged garment matches everyone: the tag's absence means "this
+    piece isn't seasonal", not "this piece is wrong for you".
+    """
+    family = season_family(season)
+    if family is None or not g.season_tags:
+        return True
+    return any(season_family(t) == family for t in g.season_tags)
+
+
 def season_score(g: Garment, season: str | None) -> float:
     """How well a garment's season fits the shopper's seasonal palette.
 
@@ -157,6 +197,7 @@ def season_score(g: Garment, season: str | None) -> float:
     """
     if not season or not g.season_tags:
         return SEASON_NEUTRAL
-    target = season.strip().lower()
-    tags = {t.strip().lower() for t in g.season_tags}
-    return SEASON_MATCH if target in tags else SEASON_OFF_SEASON_PENALTY
+    if season_family(season) is None:
+        # A season we can't place at all carries no signal either way.
+        return SEASON_NEUTRAL
+    return SEASON_MATCH if season_matches(g, season) else SEASON_OFF_SEASON_PENALTY

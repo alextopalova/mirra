@@ -47,7 +47,8 @@ def test_recommend_route_response_shape_matches_frontend_contract():
     data = r.json()
     assert data, "expected some dress recommendations"
     for item in data:
-        assert set(item.keys()) == {"garment", "score", "reasons"}
+        assert set(item.keys()) == {"garment", "score", "reasons", "exact"}
+        assert isinstance(item["exact"], bool)
         assert isinstance(item["score"], (int, float))
         assert 0.0 <= item["score"] <= 1.0
         assert isinstance(item["reasons"], list)

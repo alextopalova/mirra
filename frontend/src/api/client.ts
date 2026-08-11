@@ -2,7 +2,14 @@ import type { BodyProfile, Palette, Recommendation } from "./types";
 import * as M from "./mocks";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
-const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === "true";
+
+/** Set VITE_USE_MOCKS=true to run the kiosk with no backend at all.
+ *
+ * Exported because it covers more than this module: the capture screen also
+ * has to stand down (it can't mock a camera or a pose model, so it offers a
+ * skip instead) or the flow dead-ends at the scan and mock mode looks
+ * broken even though every API call is being served from mocks. */
+export const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === "true";
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Kiosk hygiene: "analyzing" and "tryon" are the two screens where the idle
@@ -59,7 +66,7 @@ export async function analyzeBody(input: {
 export async function recommend(input: {
   profile: BodyProfile; palette: Palette; category: string; occasion: string;
 }): Promise<Recommendation[]> {
-  if (USE_MOCKS) { await wait(500); return M.mockRecs; }
+  if (USE_MOCKS) { await wait(400); return M.mockRecommend(input); }
   const r = await fetch(`${BASE}/recommend`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
     signal: AbortSignal.timeout(RECOMMEND_TIMEOUT_MS),
@@ -81,8 +88,17 @@ export function resolveImageUrl(imageUrl: string): string {
   return `${BASE}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
 }
 
+/** The stand-in "scan", already resolved to a loadable URL — the capture
+ *  screen stores it directly as a photo, so it can't be a relative path. */
+export function mockScanPhoto(): string {
+  return resolveImageUrl(M.mockScanPhotoPath);
+}
+
 export async function tryOn(input: { personPhoto: string; garmentId: string }): Promise<{ image: string }> {
-  if (USE_MOCKS) { await wait(1800); return M.mockTryOn; }
+  if (USE_MOCKS) {
+    await wait(1800);
+    return { image: resolveImageUrl(M.mockTryOnPath(input.garmentId)) };
+  }
   const r = await fetch(`${BASE}/try-on`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
     signal: AbortSignal.timeout(TRY_ON_TIMEOUT_MS),

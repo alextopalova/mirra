@@ -1,7 +1,0 @@
-.tryon-image {
-  max-height: 62vh;
-  max-width: 100%;
-  border-radius: var(--radius);
-  box-shadow: var(--glass-shadow);
-  object-fit: contain;
-}

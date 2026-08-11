@@ -1,0 +1,108 @@
+.start { justify-content: center; gap: 0; }
+
+.start-wordmark {
+  font-size: 6em;
+  line-height: 0.95em;
+  letter-spacing: -0.045em;
+  /* The one gradient in the app, on the one word that is the brand: baby
+     blue into periwinkle, left to right. Nothing else needs to carry it. */
+  background: linear-gradient(100deg, #8FB4F5 0%, #7C8CF8 45%, #5A67E0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* The brand mark above the greeting. Sized against the viewport as well as
+   a maximum so it never outgrows the heading under it, and `height: auto`
+   against the SVG's intrinsic 510x98 keeps the box reserved from first
+   paint — no reflow of the whole screen when it loads. */
+.start-logo {
+  margin-top: 15px;
+  display: block;
+  width: min(32vw, 200px);
+  height: auto;
+  margin-bottom: 14px;
+}
+
+.thumbnail {
+  display: block;
+  width: min(90vw, 320px);
+  height: auto;
+  margin-bottom: 14px;
+}
+
+.start-lead {
+  font-size: clamp(21px, 2.1vw, 28px);
+  line-height: 1.15;
+  color: var(--ink-dim);
+  text-wrap: balance;
+}
+
+.start-cta { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 36px; }
+.start-cta .btn { padding: 0 56px; font-size: 23px; }
+.start-time { font-size: 17px; color: var(--ink-mute); }
+
+.start-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  list-style: none;
+  margin-top: clamp(40px, 6vh, 76px);
+  width: min(100%, 860px);
+  text-align: left;
+}
+
+.start-step {
+  min-width: 0;
+  padding: 0 clamp(6px, 2vw, 30px);
+  border-left: 1px solid var(--hairline);
+}
+
+.start-step:first-child {
+  border-left: none;
+  padding-left: 0;
+}
+
+.start-step-n {
+  display: block;
+  font-size: clamp(10px, 1.5vw, 13px);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--accent-deep);
+}
+
+.start-step-title {
+  font-size: clamp(13px, 2.4vw, 21px);
+  font-weight: 700;
+  margin-top: 6px;
+  letter-spacing: -0.02em;
+}
+
+.start-step-body {
+  font-size: clamp(10px, 1.8vw, 16px);
+  line-height: 1.4;
+  margin-top: 4px;
+  color: var(--ink-dim);
+}
+
+/* Keep all 3 columns even on narrow screens */
+@media (max-width: 860px) {
+  .start-steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .start-step {
+    padding-left: clamp(6px, 2vw, 16px);
+    padding-right: clamp(6px, 2vw, 16px);
+  }
+}
+
+@media (max-height: 760px) {
+  .start-steps {
+    margin-top: 30px;
+  }
+
+  .start-step-body {
+    display: none;
+  }
+}

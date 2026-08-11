@@ -1,24 +1,46 @@
+/* Fully rounded: on a self-service screen the shape itself says "press
+   me", and a pill is the least ambiguous shape there is. Sized past the
+   9–12mm touch-target guidance for kiosks. */
 .btn {
   min-height: var(--touch);
   padding: 0 40px;
-  font-size: 24px;
+  font-family: var(--font);
+  font-size: 21px;
   font-weight: 600;
-  color: var(--text);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  background: none;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: transform 0.08s ease, filter 0.15s ease;
+  transition: transform 0.08s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
-.btn:active { transform: scale(0.97); }
+.btn:active { transform: scale(0.98); }
 .btn:disabled { opacity: 0.4; pointer-events: none; }
-.btn-solid { background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%); }
-.btn-ghost { background: var(--glass-bg-strong); border: 1px solid var(--glass-border); }
-/* Error/retry affordance: an outlined red variant rather than a red fill,
-   so the label can stay --danger-on-light (same pairing ErrorState already
-   uses for its heading) instead of needing a separate light-text token for
-   contrast against a solid red fill. */
+
+/* --accent-deep, not --accent: white on #7C8CF8 is 2.9:1 and fails AA;
+   on #4A5BD6 it's 5.5:1 and passes at every size. The lighter periwinkle
+   is reserved for fills that never carry text. */
+.btn-solid {
+  background: var(--accent-deep);
+  color: #FFFFFF;
+  box-shadow: var(--shadow-card);
+}
+.btn-solid:hover { background: var(--accent-press); box-shadow: var(--shadow-lift); }
+
+.btn-ghost {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  color: var(--ink);
+}
+.btn-ghost:hover { background: var(--accent-soft); border-color: var(--accent); }
+
+/* Outlined rather than filled: a solid red block reads as an alarm on a
+   retail screen, and the outline keeps the label at --danger's full
+   contrast instead of needing a light-on-red pairing. */
 .btn-danger {
-  background: var(--glass-bg-strong);
+  background: var(--surface);
   border: 2px solid var(--danger);
   color: var(--danger);
 }
+.btn-danger:hover { background: #FDF1EF; }

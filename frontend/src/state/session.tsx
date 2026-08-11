@@ -12,7 +12,12 @@ interface SessionData {
   occasion?: string;
   recommendations?: Recommendation[];
   selectedId?: string;
-  tryOnImage?: string;  // dataURL/URL from VTO
+  // Try-on results by garment id. Kept in the session rather than in the
+  // fitting room's own state so returning to a piece the shopper has
+  // already seen on themselves is instant, even after a detour through the
+  // "Get it" screen — a second generation of an identical image is 30+
+  // seconds of a shopper's time for no new information.
+  tryOns?: Record<string, string>;  // dataURL/URL from VTO
 }
 
 interface Ctx {
