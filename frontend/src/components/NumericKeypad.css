@@ -1,23 +1,42 @@
-.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: min(360px, 90vw); }
+/* Fills whatever column it is placed in rather than sizing itself, so the
+   measurements screen can put the keypad, the fields above it and the
+   confirm button below it on one shared width and one shared left edge.
+   The old `min(360px, 90vw)` sized independently of everything around it,
+   which is what made the three blocks read as three unrelated islands.
+
+   Sizes come from `--u`, the column width the measurements screen derives
+   from the viewport (see measurements.css for how, and why the keypad is
+   capped at three quarters of the screen). The fallback keeps this
+   component usable if it is ever mounted somewhere that doesn't set --u.
+
+   Keys are WIDER THAN TALL (0.62 ratio). Four square keys plus the fields,
+   heading and confirm button do not fit a viewport's height at any width
+   worth tapping, so the keypad would have been the thing that forced a
+   scrollbar. A landscape key is still a far larger target than the 72px
+   kiosk guidance at every size this screen actually renders at. */
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: calc(var(--u, 300px) * 0.029);
+  width: 100%;
+}
 .keypad button {
-  min-height: var(--touch);
+  /* Height, not min-height: this has to be able to shrink as well as grow,
+     or a short viewport overflows however small everything else gets. */
+  height: calc(var(--u, 300px) * 0.195);
+  min-height: 0;
   font-family: var(--font);
-  font-size: 30px;
+  font-size: clamp(16px, calc(var(--u, 300px) * 0.068), 52px);
   font-weight: 500;
-  border-radius: var(--radius);
+  /* Scales with the key. A fixed 28px radius on a key that has shrunk to
+     55px tall turns it into a pill, which reads as a different control. */
+  border-radius: min(var(--radius-lg), calc(var(--u, 300px) * 0.037));
   background: var(--surface);
   border: 1px solid var(--hairline);
   color: var(--ink);
   cursor: pointer;
+  box-shadow: var(--shadow-card);
   transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
 }
 .keypad button:hover { border-color: var(--accent); }
-.keypad button:active { transform: scale(0.96); background: var(--accent-soft); border-color: var(--accent); }
-
-/* Short viewports: tighten the grid so the keypad and confirm button still
-   fit under the two field panels without shrinking any button below the
-   --touch minimum. */
-@media (max-height: 700px) {
-  .keypad { gap: 10px; }
-  .keypad button { font-size: 24px; }
-}
+.keypad button:active { transform: scale(0.97); background: var(--accent-soft); border-color: var(--accent); }

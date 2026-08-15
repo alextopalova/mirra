@@ -4,7 +4,7 @@
    title now owns its row outright and never has to make space for a button
    sitting next to it — in portrait it would have been the thing that
    wrapped. */
-.fitting-title { font-size: clamp(28px, 3.4vw, 44px); flex-shrink: 0; }
+.fitting-title { font-size: clamp(28px, 5vw, 54px); flex-shrink: 0; }
 
 /* The mirror image of the fixed Home button (StartOverButton.css): same
    16px offset, same 56px circle, opposite corner — the two read as one
@@ -106,62 +106,96 @@
 
 /* ---- rack ---- */
 
-.rack { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.rack { display: flex; flex-direction: column; gap: clamp(12px, 1.9vw, 20px); min-height: 0; }
 
-.filters { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
+/* Two dropdowns, side by side, one row. See FittingRoomScreen.tsx for why
+   this replaced eleven chips across two rows.
 
-/* Said once, above both rows, in the caption voice used elsewhere for
-   small uppercase labels — it's an instruction, not a heading, and must
-   not read louder than the filters themselves. */
-.filters-hint {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-}
+   Shaped exactly like the height/weight field on the measurements screen —
+   label above, recessed box below, unit-sized chevron in a soft disc — so
+   the kiosk teaches that control once and reuses it. Sizes are clamps
+   whose upper bound is the 1080px-kiosk value, same convention as
+   measurements.css. */
+.filters { display: flex; gap: clamp(10px, 1.9vw, 20px); flex-shrink: 0; }
 
-/* Label beside its chips rather than above them, so labelling both rows
-   costs no extra rows of height on a screen where the rack wants every
-   pixel. Wraps only if the chips genuinely run out of width. */
-.filter-row { display: flex; align-items: center; gap: clamp(8px, 1vw, 14px); flex-wrap: wrap; }
-/* A floor wide enough for the longer of the two labels, so both rows of
-   chips start on the same left edge and the block reads as one control. */
+.filter-field { position: relative; flex: 1; min-width: 0; }
+
 .filter-label {
-  flex: 0 0 auto;
-  min-width: 104px;
-  font-size: 15px;
+  display: block;
+  font-size: clamp(13px, 2vw, 22px);
   font-weight: 600;
   color: var(--ink-dim);
+  padding-left: 6px;
+  margin-bottom: clamp(5px, 1.1vw, 12px);
 }
 
-.chips { display: flex; gap: 10px; flex-wrap: wrap; }
-.chip {
-  min-height: 56px;
-  padding: 0 24px;
-  border-radius: var(--radius-pill);
+/* `appearance: none` strips the platform's own control chrome so the box
+   can match the measurements field; the platform's *picker* is untouched,
+   which is the part worth keeping. Right padding clears the chevron. */
+.filter-select {
+  appearance: none;
+  width: 100%;
+  min-height: clamp(56px, 10.7vw, 116px);
+  padding: 0 clamp(52px, 8.5vw, 92px) 0 clamp(14px, 2.6vw, 28px);
   font-family: var(--font);
-  font-size: 17px;
-  font-weight: 600;
+  font-size: clamp(16px, 2.8vw, 30px);
+  font-weight: 700;
+  color: var(--ink);
   background: var(--surface);
-  border: 1px solid var(--hairline);
-  color: var(--ink-dim);
+  border: 2px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 2px 6px rgba(38, 54, 110, 0.06);
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-.chip:hover { border-color: var(--accent); color: var(--ink); }
-/* The selected chip is the one solid periwinkle on the screen besides the
-   primary button — unmistakable at a glance, and white-on-deep so it stays
-   readable at any size. */
-.chip.is-active {
-  background: var(--accent-deep);
-  border-color: transparent;
-  color: #FFFFFF;
-}
-.chip:first-letter { text-transform: uppercase; }
+.filter-select:hover { border-color: var(--accent); }
+.filter-select:focus-visible { outline: 3px solid var(--accent-deep); outline-offset: 3px; }
 
-.rack-note { font-size: 14px; color: var(--ink-mute); flex-shrink: 0; }
-.rack-empty { font-size: 18px; color: var(--ink-dim); padding: 24px 0; }
+/* Drawn rather than a glyph so it keeps its weight at every size, and
+   `pointer-events: none` so the disc is part of the select's hit area
+   instead of a hole in it. */
+.filter-chevron {
+  position: absolute;
+  right: clamp(10px, 2vw, 22px);
+  /* Centred in the select by construction — (select height - disc height) / 2,
+     repeating the two clamps rather than guessing an offset. A fixed offset
+     only lands on the centre at one viewport width and drifts either side
+     of it, which is exactly what a hand-tuned value did here. `bottom`
+     rather than `top` because the label above the select is part of this
+     positioning context and its height moves with the type scale. */
+  bottom: calc((clamp(56px, 10.7vw, 116px) - clamp(40px, 6.3vw, 68px)) / 2);
+  width: clamp(40px, 6.3vw, 68px);
+  height: clamp(40px, 6.3vw, 68px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  pointer-events: none;
+}
+.filter-chevron::before {
+  content: "";
+  width: clamp(9px, 1.4vw, 15px);
+  height: clamp(9px, 1.4vw, 15px);
+  margin-top: -0.35em;
+  border-right: clamp(2px, 0.37vw, 4px) solid currentColor;
+  border-bottom: clamp(2px, 0.37vw, 4px) solid currentColor;
+  transform: rotate(45deg);
+}
+
+/* Names the rack and, when there are backfilled pieces, says so. One row,
+   baseline-aligned, so it costs a line of caption rather than a block. */
+.rack-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.rack-head .eyebrow { font-size: clamp(13px, 1.8vw, 19px); }
+.rack-note { font-size: clamp(14px, 1.9vw, 20px); color: var(--ink-mute); }
+.rack-empty { font-size: clamp(18px, 2.2vw, 24px); color: var(--ink-dim); padding: 24px 0; }
 
 .rack-list {
   flex: 1;
@@ -250,25 +284,54 @@
    rather than width so it applies to a 1080x1920 kiosk (far wider than any
    width breakpoint) as well as to a phone.
 
-   Both rows are bounded and the rack scrolls inside its own row, so the
-   page itself still never scrolls — the shopper's hand stays in the lower
-   half of the screen, which is the reachable half. */
+   Every row is bounded and only the rack scrolls, so the page itself never
+   scrolls — the shopper's hand stays in the lower half of the screen,
+   which is the reachable half. */
 @media (orientation: portrait) {
   .fitting-body {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 44vh) minmax(0, 1fr);
+    /* auto, not a share of the viewport: the preview is given an explicit
+       height below and everything else is content-sized, so `1fr` on the
+       last row hands the rack all the slack. The old `44vh` gave the
+       preview 845px of a 1920px kiosk whether it needed them or not, and
+       that — plus two rows of chips — is what left the rack showing three
+       quarters of one row. */
+    grid-template-rows: auto minmax(0, 1fr);
     gap: clamp(14px, 2vh, 24px);
   }
-  .preview { flex-direction: row; align-items: stretch; gap: clamp(14px, 2vw, 24px); }
-  .preview-frame { flex: 0 0 46%; }
+  .preview {
+    flex-direction: row;
+    align-items: stretch;
+    gap: clamp(14px, 2vw, 28px);
+    /* Fixed, so the panel cannot grow with the length of a garment name or
+       a styling reason. Whatever it doesn't use is rack. */
+    height: clamp(300px, 52vw, 560px);
+  }
+  .preview-frame { flex: 0 0 40%; }
   /* Beside the preview the details column takes the rest, with the two
      actions pushed to its foot. */
   .preview-body { flex: 1; }
   .preview-actions { margin-top: auto; }
-  .rack-list { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  /* Three fixed columns rather than auto-fill: on a 1080px kiosk auto-fill
+     at a 200px minimum packs in four or five, and a garment photographed
+     head to toe stops being readable well before that. Three across gives
+     ~320px cards and two full rows above the fold. */
+  .rack-list { grid-template-columns: repeat(3, 1fr); gap: clamp(12px, 2vw, 22px); }
+  .rack-card-name { font-size: clamp(15px, 2vw, 22px); }
+  .rack-card-price { font-size: clamp(14px, 1.9vw, 21px); }
+  .preview-name, .preview-price { font-size: clamp(17px, 2.9vw, 31px); }
+  .preview-reason { font-size: clamp(15px, 2vw, 22px); }
+  .preview-actions .btn { min-height: clamp(64px, 8.9vw, 96px); font-size: clamp(18px, 2.5vw, 27px); }
+}
+
+/* Narrow phone-ish portrait: two across, and the filter labels have to be
+   allowed to wrap rather than force a scrollbar. */
+@media (max-width: 620px) and (orientation: portrait) {
+  .rack-list { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* Narrow phone-ish widths in landscape still need the stack. */
 @media (max-width: 860px) and (orientation: landscape) {
-  .fitting-body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 40vh) minmax(0, 1fr); }
+  .fitting-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .preview { height: clamp(260px, 34vh, 360px); }
 }

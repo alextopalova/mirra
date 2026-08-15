@@ -2,7 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Two icons, one per tab-strip theme. The logo is a solid black glyph
+         on transparency, so on a dark tab strip it would be an invisible
+         square; `mirra-logo-dark.png` is the same glyph in white. The
+         browser picks by media query — no build step and no JS. Chrome
+         honours `media` here; anything that doesn't simply takes the first
+         (light) icon, which is the safer default because most tab strips
+         are light. -->
+    <link rel="icon" type="image/png" href="/mirra-logo.png" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/png" href="/mirra-logo-dark.png" media="(prefers-color-scheme: dark)" />
+    <link rel="apple-touch-icon" href="/mirra-logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <title>Mirra</title>
   </head>

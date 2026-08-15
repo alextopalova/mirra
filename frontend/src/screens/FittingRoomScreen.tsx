@@ -17,6 +17,9 @@ const CATEGORIES = [
 ];
 const OCCASIONS = ["everyday", "work", "date night", "wedding guest"];
 
+/** Sentence case for display; the API values stay lowercase. */
+const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 
 const TRY_ON_ERROR = "We couldn't render that try-on.";
 
@@ -183,43 +186,42 @@ export function FittingRoomScreen() {
 
         {/* The rack. Filters stay put; only this list re-fetches. */}
         <section className="rack">
-          {/* Unlabelled, the two rows of pills read as decoration. Each row
-              names what it filters, and the hint says out loud that the
-              rack answers to a tap — a kiosk has no hover to discover it
-              with. The visible label is the group's accessible name too
-              (aria-labelledby), so there's no second, invisible wording to
-              drift out of sync with it. */}
+          {/* Two dropdowns, one row. Eleven chips across two labelled rows
+              cost ~260px of a 1920px kiosk — a quarter of the rack's height
+              spent on controls that are only touched once or twice a
+              session — and left the rack opening on three quarters of a
+              row. A native <select> collapses each set to one control and
+              hands the list itself to the platform, whose picker is already
+              a full-height touch list we don't have to build, size or make
+              accessible ourselves. */}
           <div className="filters">
-            <p className="filters-hint">Tap to filter the rack</p>
-            <div className="filter-row">
-              <span className="filter-label" id="filter-category">Looking for</span>
-              <div className="chips" role="group" aria-labelledby="filter-category">
+            <div className="filter-field">
+              <label className="filter-label" htmlFor="filter-category">Looking for</label>
+              <select
+                id="filter-category"
+                className="filter-select"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
                 {CATEGORIES.map((c) => (
-                  <button
-                    key={c.key}
-                    className={`chip${c.key === category ? " is-active" : ""}`}
-                    aria-pressed={c.key === category}
-                    onClick={() => setCategory(c.key)}
-                  >
-                    {c.label}
-                  </button>
+                  <option key={c.key} value={c.key}>{c.label}</option>
                 ))}
-              </div>
+              </select>
+              <span className="filter-chevron" aria-hidden="true" />
             </div>
-            <div className="filter-row">
-              <span className="filter-label" id="filter-occasion">Wearing it to</span>
-              <div className="chips" role="group" aria-labelledby="filter-occasion">
+            <div className="filter-field">
+              <label className="filter-label" htmlFor="filter-occasion">Wearing it to</label>
+              <select
+                id="filter-occasion"
+                className="filter-select"
+                value={occasion}
+                onChange={(e) => setOccasion(e.target.value)}
+              >
                 {OCCASIONS.map((o) => (
-                  <button
-                    key={o}
-                    className={`chip${o === occasion ? " is-active" : ""}`}
-                    aria-pressed={o === occasion}
-                    onClick={() => setOccasion(o)}
-                  >
-                    {o}
-                  </button>
+                  <option key={o} value={o}>{titleCase(o)}</option>
                 ))}
-              </div>
+              </select>
+              <span className="filter-chevron" aria-hidden="true" />
             </div>
           </div>
 
@@ -231,16 +233,19 @@ export function FittingRoomScreen() {
             </p>
           ) : (
             <>
-              {/* Said plainly rather than quietly padding the rack: these
-                  pieces are in the category but outside the season or
-                  occasion asked for. */}
-              {nearCount > 0 && (
-                <p className="rack-note">
-                  {recs.length - nearCount === 0
-                    ? "No exact matches here — showing the closest pieces."
-                    : `${recs.length - nearCount} exact, ${nearCount} close.`}
-                </p>
-              )}
+              {/* Names the region and, when relevant, says plainly that some
+                  pieces are backfilled: they're in the category but outside
+                  the season or occasion asked for. */}
+              <div className="rack-head">
+                <span className="eyebrow">Your rack</span>
+                {nearCount > 0 && (
+                  <span className="rack-note">
+                    {recs.length - nearCount === 0
+                      ? "No exact matches — showing the closest pieces."
+                      : `${recs.length - nearCount} exact · ${nearCount} close`}
+                  </span>
+                )}
+              </div>
               <div className="rack-list">
                 {recs.map((r) => (
                   <GarmentCard

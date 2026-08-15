@@ -2,20 +2,26 @@ import { useState } from "react";
 import { useSession } from "../state/session";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { NumericKeypad } from "../components/NumericKeypad";
-import { GlassPanel } from "../components/GlassPanel";
 import "./screen.css";
 import "./measurements.css";
 
 /**
  * Height and weight, which the body analysis needs for BMI.
  *
- * Both values are shown SMALL and deliberately so. This screen stands on a
- * shop floor: the rest of the kiosk is sized to be read from several metres
- * back, and rendering someone's weight at that size broadcasts it to the
- * queue behind them. The numbers still have to be checkable by the person
- * typing them — a typo here skews the scan — so they're legible at arm's
- * length and no further. The keypad keeps its full touch size; only the
- * readout shrank.
+ * Each field is shaped like a text input — a label above a recessed box —
+ * because that is the one shape every shopper already reads as "you type
+ * here", and this screen has no real input to borrow the affordance from.
+ * The unit rides inside the box as a chip, so "cm" and "kg" are legible
+ * before anything has been typed and the number never has to carry them.
+ *
+ * The values are still shown SMALL and deliberately so. This screen stands
+ * on a shop floor: the rest of the kiosk is sized to be read from several
+ * metres back, and rendering someone's weight at that size broadcasts it to
+ * the queue behind them. The number is sized to be proof-read at arm's
+ * length and no further — a typo here skews the scan.
+ *
+ * Fields, keypad and confirm button share one column (see
+ * `.measurements-col`) so the screen reads as a single stack of controls.
  */
 export function MeasurementsScreen() {
   const { go, update } = useSession();
@@ -24,25 +30,33 @@ export function MeasurementsScreen() {
   const [weight, setWeight] = useState("");
   const ready = height !== "" && weight !== "";
 
-  const fieldPanel = (
+  const numberField = (
     key: "height" | "weight",
     label: string,
     value: string,
     unit: string,
-  ) => (
-    <GlassPanel className={`measurement-field ${field === key ? "sel" : ""}`}>
+  ) => {
+    const selected = field === key;
+    return (
       <button
-        className="field-btn"
+        className={`measurement-field${selected ? " is-selected" : ""}`}
         onClick={() => setField(key)}
-        aria-pressed={field === key}
+        aria-pressed={selected}
       >
         <span className="field-label">{label}</span>
-        <span className={`field-value${value ? "" : " field-value-empty"}`}>
-          {value ? `${value} ${unit}` : "Tap to enter"}
+        <span className="field-box">
+          <span className={`field-value${value ? "" : " field-value-empty"}`}>
+            {value || "Tap to enter"}
+            {/* Only on the field being edited, and only once there is
+                something to sit after: a caret in an empty box would read
+                as a stray mark next to the placeholder. */}
+            {value && selected && <span className="field-caret" aria-hidden="true" />}
+          </span>
+          <span className="field-unit">{unit}</span>
         </span>
       </button>
-    </GlassPanel>
-  );
+    );
+  };
 
   return (
     <div className="screen screen-measurements">
@@ -50,16 +64,18 @@ export function MeasurementsScreen() {
       <p className="measurements-hint">
         Enter your height, then your weight — tap a field to switch.
       </p>
-      <div className="measurements-fields">
-        {fieldPanel("height", "Height", height, "cm")}
-        {fieldPanel("weight", "Weight", weight, "kg")}
+      <div className="measurements-col">
+        <div className="measurements-fields">
+          {numberField("height", "Height", height, "cm")}
+          {numberField("weight", "Weight", weight, "kg")}
+        </div>
+        <NumericKeypad
+          value={field === "height" ? height : weight}
+          onChange={field === "height" ? setHeight : setWeight}
+        />
+        <PrimaryButton label="Analyze me" disabled={!ready}
+          onClick={() => { update({ heightCm: +height, weightKg: +weight }); go("analyzing"); }} />
       </div>
-      <NumericKeypad
-        value={field === "height" ? height : weight}
-        onChange={field === "height" ? setHeight : setWeight}
-      />
-      <PrimaryButton label="Analyze me" disabled={!ready}
-        onClick={() => { update({ heightCm: +height, weightKg: +weight }); go("analyzing"); }} />
     </div>
   );
 }

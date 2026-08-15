@@ -1,3 +1,16 @@
+/* Sized against the viewport, not fixed: this rail was authored at phone
+   sizes (16px dot, 14px label) and never grew, so on a 1080x1920 kiosk it
+   read as a thin stripe across the top. Every dimension below is a clamp
+   whose upper bound is the kiosk value and whose lower bound is the old
+   phone value, so a phone is unchanged and the kiosk gets a rail in
+   proportion to the screen it's on. 1080px wide makes 1vw = 10.8px.
+ *
+ * The middle term is `min(<vw>, <vh>)`, not vw alone, so the rail also
+ * shrinks on a SHORT window. It sits above every screen's content box, so
+ * a rail that could only grow was height the measurements screen below it
+ * could never get back — and that screen must never scroll. On a
+ * 1080x1920 kiosk the vw term is the smaller of the two, so the kiosk
+ * renders identically to before; only short windows are affected. */
 .rail {
   flex-shrink: 0;
   /* Symmetric horizontal padding, and it has to stay symmetric: the track
@@ -6,7 +19,7 @@
      the way — it moves the whole rail left by half the difference. 88px
      clears the button (16px offset + 56px wide) on the right, where it sits,
      and is simply mirrored on the left. */
-  padding: 20px 88px 16px;
+  padding: clamp(20px, min(3.1vw, 2.2vh), 34px) 88px clamp(16px, min(2.4vw, 1.7vh), 26px);
 }
 
 .rail-track {
@@ -15,7 +28,7 @@
   justify-content: center;
   list-style: none;
   margin: 0 auto;
-  width: min(100%, 680px);
+  width: min(100%, 840px);
 }
 
 /* Each step owns the segment of rule to its left, drawn as a ::before so
@@ -26,30 +39,32 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 9px;
-  font-size: 14px;
+  gap: clamp(9px, min(1.2vw, 0.85vh), 13px);
+  font-size: clamp(14px, min(1.95vw, 1.4vh), 21px);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 .rail-step::before {
   content: "";
   position: absolute;
-  /* Centred on the dot: (dot height - line height) / 2 = (16 - 3) / 2. */
-  top: 6.5px;
+  /* Centred on the dot: (dot height - line height) / 2. Both terms are the
+     same clamps used below, so the rule stays on the dot's centre line at
+     every size rather than drifting off it as the dot grows. */
+  top: calc((clamp(16px, min(2.2vw, 1.55vh), 24px) - clamp(3px, min(0.37vw, 0.26vh), 4px)) / 2);
   right: 50%;
   left: -50%;
-  height: 3px;
-  border-radius: 1.5px;
+  height: clamp(3px, min(0.37vw, 0.26vh), 4px);
+  border-radius: 2px;
   background: var(--hairline);
 }
 .rail-step:first-child::before { display: none; }
 
 .rail-dot {
-  width: 16px;
-  height: 16px;
+  width: clamp(16px, min(2.2vw, 1.55vh), 24px);
+  height: clamp(16px, min(2.2vw, 1.55vh), 24px);
   border-radius: 50%;
   background: var(--surface);
-  box-shadow: inset 0 0 0 2px var(--hairline);
+  box-shadow: inset 0 0 0 clamp(2px, min(0.28vw, 0.2vh), 3px) var(--hairline);
   position: relative;
   z-index: 1;
 }
@@ -66,7 +81,7 @@
    the solid dots behind it. */
 .rail-step--current .rail-dot {
   background: var(--surface);
-  box-shadow: inset 0 0 0 4px var(--accent-deep);
+  box-shadow: inset 0 0 0 clamp(4px, min(0.55vw, 0.39vh), 6px) var(--accent-deep);
 }
 .rail-step--current::before { background: var(--accent); }
 .rail-step--current .rail-label { color: var(--ink); font-weight: 700; }
