@@ -9,6 +9,12 @@
          honours `media` here; anything that doesn't simply takes the first
          (light) icon, which is the safer default because most tab strips
          are light. -->
+    <!-- The unconditional fallback, and the file browsers request on their
+         own at /favicon.ico whether or not it is declared here. Without a
+         real file at that path the request falls through to the SPA rewrite
+         and comes back as HTML, which the browser reports as a failed
+         resource. 16/32/48px PNGs inside an ICO container. -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" href="/mirra-logo.png" media="(prefers-color-scheme: light)" />
     <link rel="icon" type="image/png" href="/mirra-logo-dark.png" media="(prefers-color-scheme: dark)" />
     <link rel="apple-touch-icon" href="/mirra-logo.png" />
