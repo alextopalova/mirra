@@ -39,8 +39,7 @@
    retail screen, and the outline keeps the label at --danger's full
    contrast instead of needing a light-on-red pairing. */
 .btn-danger {
-  background: var(--surface);
-  border: 2px solid var(--danger);
-  color: var(--danger);
+  background: var(--danger);
+  color: #FFFFFF;
 }
 .btn-danger:hover { background: #FDF1EF; }

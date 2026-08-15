@@ -1,5 +1,8 @@
-.field-btn { display: block; width: 100%; min-height: var(--touch); cursor: pointer;
-  background: none; border: none; padding: 0; text-align: inherit; font: inherit; color: inherit; }
+/* Still a full-size touch target even though its contents are now small —
+   the panel is what the shopper taps to switch fields. */
+.field-btn { display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; width: 100%; min-height: var(--touch); cursor: pointer;
+  background: none; border: none; padding: 0; text-align: center; font: inherit; color: inherit; }
 
 .measurements-hint { margin-top: -12px; }
 
@@ -21,11 +24,14 @@
   opacity: 1;
 }
 
-.field-label { display: flex; align-items: baseline; justify-content: center; gap: 8px;
-  font-size: 17px; color: var(--ink-dim); }
+.field-label { font-size: 15px; color: var(--ink-mute); }
 
-.measurement-field h1 { font-size: clamp(34px, 4vw, 48px); text-align: center; margin-top: 4px; }
-.field-value-empty { color: var(--ink-mute); font-size: 26px; font-weight: 500; font-family: var(--font); }
+/* ~22px, against the 48px this used to be. Big enough to proof-read what
+   you just typed, small enough that it isn't legible to the queue behind
+   you — the whole reason this screen deviates from the kiosk's read-me-
+   from-across-the-room type scale. */
+.field-value { font-size: 22px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.field-value-empty { color: var(--ink-mute); font-weight: 500; }
 
 /* Short-viewport phones in Safari (e.g. 375x667, 390x844 with browser chrome
    visible): tighten vertical rhythm so both field panels, the keypad, and the
@@ -34,8 +40,7 @@
 @media (max-height: 700px) {
   .screen-measurements { padding: 24px; gap: 16px; }
   .measurements-hint { font-size: 18px; margin-top: -4px; }
-  .measurement-field.glass-panel { padding: 16px; }
-  .measurement-field h1 { font-size: 34px; }
+  .measurement-field.glass-panel { padding: 14px; }
 }
 
 @media (max-width: 380px) {

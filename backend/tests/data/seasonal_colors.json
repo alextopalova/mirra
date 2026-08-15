@@ -1,0 +1,66 @@
+[
+  {
+    "file": "autumn.png",
+    "season": "Autumn",
+    "skin_color": "#d3a58f",
+    "eyebrow_color": "#604436",
+    "eye_color": "#362d2b",
+    "hair_color": "#927a67"
+  },
+  {
+    "file": "autumn_2.png",
+    "season": "Autumn",
+    "skin_color": "#caa28b",
+    "eyebrow_color": "#614638",
+    "eye_color": "#443125",
+    "hair_color": "#231913"
+  },
+  {
+    "file": "spring.png",
+    "season": "Spring",
+    "skin_color": "#d2988f",
+    "eyebrow_color": "#764d3e",
+    "eye_color": "#4f4e52",
+    "hair_color": "#7e5f4b"
+  },
+  {
+    "file": "spring_2.png",
+    "season": "Spring",
+    "skin_color": "#c6a68f",
+    "eyebrow_color": "#6f4b34",
+    "eye_color": "#564942",
+    "hair_color": "#4b2518"
+  },
+  {
+    "file": "summer.png",
+    "season": "Summer",
+    "skin_color": "#dcb595",
+    "eyebrow_color": "#9a8060",
+    "eye_color": "#827976",
+    "hair_color": "#9e8e73"
+  },
+  {
+    "file": "summer_2.png",
+    "season": "Summer",
+    "skin_color": "#dec3ab",
+    "eyebrow_color": "#8e7c6b",
+    "eye_color": "#7b8287",
+    "hair_color": "#4c4334"
+  },
+  {
+    "file": "winter.png",
+    "season": "Winter",
+    "skin_color": "#d3b2a2",
+    "eyebrow_color": "#49342a",
+    "eye_color": "#37251b",
+    "hair_color": "#1d1715"
+  },
+  {
+    "file": "winter_2.png",
+    "season": "Winter",
+    "skin_color": "#d3af99",
+    "eyebrow_color": "#614d40",
+    "eye_color": "#494b47",
+    "hair_color": "#1b1c16"
+  }
+]

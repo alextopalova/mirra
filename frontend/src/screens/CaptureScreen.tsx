@@ -7,7 +7,6 @@ import { DirectionArrow } from "../components/DirectionArrow";
 import { Spinner } from "../components/Spinner";
 import { useAutoCapture } from "../lib/useAutoCapture";
 import { MIRROR_PREVIEW, computeCoverCrop } from "../lib/poseFit";
-import { USE_MOCKS, mockScanPhoto } from "../api/client";
 import "./capture.css";
 import "./screen.css";
 
@@ -16,6 +15,13 @@ import "./screen.css";
 const SUCCESS_HOLD_MS = 900;
 const TURN_HOLD_MS = 2200;
 const FEEDBACK_EXIT_MS = 220; // must match the CSS exit transition duration
+
+// Longest edge for a photo chosen from disk: matches the camera path's
+// capture resolution, so both routes hand the backend the same quality of
+// source. Big enough that the face crop taken out of it still has real
+// detail for colour analysis, capped so a 12MP original doesn't become a
+// 20MB base64 request body.
+const PICKED_PHOTO_MAX_PX = 1920;
 
 export function CaptureScreen() {
   const { go, update } = useSession();
@@ -85,7 +91,11 @@ export function CaptureScreen() {
     let stream: MediaStream | undefined;
     setCameraReady(false);
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 1280 } } })
+      // 1920, not 1280: the head is a small part of a full-body shot, and
+      // the colour analysis needs a face crop of usable resolution out of
+      // it (see backend app/youcam/color.py). `ideal` degrades to whatever
+      // the camera actually supports, so this can't fail on lesser hardware.
+      .getUserMedia({ video: { facingMode: "user", width: { ideal: 1920 }, height: { ideal: 1920 } } })
       .then((s) => {
         if (cancelled) { s.getTracks().forEach((t) => t.stop()); return; }
         stream = s;
@@ -153,25 +163,32 @@ export function CaptureScreen() {
     timerRef.current = id;
   };
 
+  // Everything that happens once a photo exists, whatever produced it: store
+  // it against the current step, then run the same confirmation -> turn
+  // prompt -> next step sequence. Split out of `capture` so a photo chosen
+  // from disk (see `pickPhoto`) travels the identical path — the point of
+  // that affordance is to stand in for the capture exactly, not to shortcut
+  // around it.
+  const commitPhoto = (img: string) => {
+    if (step === "front") {
+      update({ frontPhoto: img });
+      // Big checkmark, then a big "turn around" prompt, then the side
+      // step begins — all from a fixed timer, never gated on detection.
+      showFeedback("success", SUCCESS_HOLD_MS, () => {
+        showFeedback("turn", TURN_HOLD_MS, () => setStep("side"));
+      });
+    } else {
+      update({ sidePhoto: img });
+      showFeedback("success", SUCCESS_HOLD_MS, () => go("measurements"));
+    }
+  };
+
   // Fires only from the auto-capture hook's onFit callback below — there is
   // no button that calls this. The guard protects against the hook somehow
   // signalling fit twice in a row (e.g. across a fast step transition).
   const capture = () => {
     if (timerRef.current !== null) return;
-    runCountdown(() => {
-      const img = snap();
-      if (step === "front") {
-        update({ frontPhoto: img });
-        // Big checkmark, then a big "turn around" prompt, then the side
-        // step begins — all from a fixed timer, never gated on detection.
-        showFeedback("success", SUCCESS_HOLD_MS, () => {
-          showFeedback("turn", TURN_HOLD_MS, () => setStep("side"));
-        });
-      } else {
-        update({ sidePhoto: img });
-        showFeedback("success", SUCCESS_HOLD_MS, () => go("measurements"));
-      }
-    });
+    runCountdown(() => commitPhoto(snap()));
   };
 
   // Pause detection during the countdown/step transition and while a
@@ -213,12 +230,12 @@ export function CaptureScreen() {
     ? "Camera blocked"
     : auto.phase === "unavailable"
     ? "Styling guide couldn't load"
-    : "Couldn't get a clear view of you";
+    : "Try again";
   const restartDetail =
     cameraError ??
     (auto.phase === "unavailable"
       ? "Restart the scan to try loading it again."
-      : "Stand back so your whole body is visible, then restart the scan.");
+      : "Adjust your position, then restart.");
 
   // Genuinely re-attempts detection, not just hiding the fallback UI: resets
   // the fit/stability state and fallback timer, re-initialises the pose
@@ -233,16 +250,43 @@ export function CaptureScreen() {
     }
   };
 
-  // Mock mode replaces the backend, but a camera and a pose model can't be
-  // mocked — so without this the flow dead-ends here and mock mode looks
-  // broken even though every API call is being served from mocks. Skipping
-  // stores a stand-in scan (a real head-to-toe model shot, see mocks.ts) so
-  // the fitting room has an actual body to show garments on. Gated on the
-  // same flag as the API mocks, so it cannot appear in a real deployment.
-  const skipScan = () => {
-    const photo = mockScanPhoto();
-    update({ frontPhoto: photo, sidePhoto: photo });
-    go("measurements");
+  // Stand in for the auto-capture with a photo from disk.
+  //
+  // A camera and a pose model are the two things no flag can fake, so
+  // working on anything downstream of this screen used to mean physically
+  // standing in frame. Choosing a file produces exactly what `snap()`
+  // produces -- a JPEG dataURL committed through `commitPhoto` -- so the
+  // real analysis, recommendation and try-on all run against it unchanged.
+  // This replaces the old placeholder-photo skip, which jumped straight to
+  // measurements with a 1x1 pixel and therefore couldn't exercise any of it.
+  const pickPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Let the same file be chosen twice in a row (front then side): without
+    // clearing, the input fires no change event the second time.
+    e.target.value = "";
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        // Downscaled to roughly what the camera path yields, so a 12MP
+        // phone photo doesn't become a 20MB base64 request body. Ratios
+        // drive every measurement, so scaling changes no result.
+        const scale = Math.min(1, PICKED_PHOTO_MAX_PX / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        // Deliberately NOT mirrored, unlike `snap()`: the flip there exists
+        // to match the mirrored preview the shopper was looking at. A file
+        // has no preview to agree with, and mirroring it would misrepresent
+        // which side of the body is which on the side capture.
+        c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+        commitPhoto(c.toDataURL("image/jpeg", 0.9));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
   };
 
   const heading =
@@ -291,10 +335,23 @@ export function CaptureScreen() {
           {count !== null ? "Hold still" : auto.hint}
         </p>
       ) : null}
-      {USE_MOCKS && (
-        <button className="capture-skip" onClick={skipScan}>
-          Skip scan (mock mode)
-        </button>
+      {/* Dev-only: `import.meta.env.DEV` is false in any production build,
+          so this cannot reach a real kiosk. Independent of VITE_USE_MOCKS —
+          faking the capture and mocking the API are separate concerns, and
+          the whole point here is to feed a photo to the REAL pipeline. */}
+      {import.meta.env.DEV && feedback === null && (
+        <label className="capture-skip">
+          Use a photo instead ({step})
+          {/* Visually hidden rather than `hidden`: the latter removes the
+              input from the tab order and the accessibility tree, leaving
+              the control unreachable by keyboard. */}
+          <input
+            className="capture-skip-input"
+            type="file"
+            accept="image/*"
+            onChange={pickPhoto}
+          />
+        </label>
       )}
     </div>
   );

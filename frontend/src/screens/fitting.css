@@ -1,5 +1,43 @@
 .fitting { text-align: left; }
-.fitting-title { flex-shrink: 0; font-size: clamp(28px, 3.4vw, 44px); }
+
+/* Back has left the heading band for the opposite corner (below), so the
+   title now owns its row outright and never has to make space for a button
+   sitting next to it — in portrait it would have been the thing that
+   wrapped. */
+.fitting-title { font-size: clamp(28px, 3.4vw, 44px); flex-shrink: 0; }
+
+/* The mirror image of the fixed Home button (StartOverButton.css): same
+   16px offset, same 56px circle, opposite corner — the two read as one
+   pair of corner controls instead of one fixed button and one button
+   loose in the heading. Both therefore sit in the progress rail's band,
+   which is padded 88px each side precisely to keep a 56px corner button
+   clear of the track and its "Scan" label.
+
+   Fixed rather than in flow so the heading below starts at the top of the
+   content box, unshifted, and so Back stays reachable while the rack
+   scrolls. Square, not a labelled pill: 16 + 56 = 72px stays inside the
+   rail's 78px clearance at its tightest breakpoint, where a pill wide
+   enough to spell "Back" would run under the track. */
+.back-btn {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 1000;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  color: var(--ink-mute);
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.08s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.back-btn:hover { border-color: var(--accent); color: var(--ink); }
+.back-btn:active { transform: scale(0.94); }
 
 /* Preview left, rack right. The preview is a fixed share so the rack gets
    every remaining pixel — the rack is what the shopper scans. */
@@ -71,6 +109,32 @@
 .rack { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 
 .filters { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
+
+/* Said once, above both rows, in the caption voice used elsewhere for
+   small uppercase labels — it's an instruction, not a heading, and must
+   not read louder than the filters themselves. */
+.filters-hint {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+/* Label beside its chips rather than above them, so labelling both rows
+   costs no extra rows of height on a screen where the rack wants every
+   pixel. Wraps only if the chips genuinely run out of width. */
+.filter-row { display: flex; align-items: center; gap: clamp(8px, 1vw, 14px); flex-wrap: wrap; }
+/* A floor wide enough for the longer of the two labels, so both rows of
+   chips start on the same left edge and the block reads as one control. */
+.filter-label {
+  flex: 0 0 auto;
+  min-width: 104px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-dim);
+}
+
 .chips { display: flex; gap: 10px; flex-wrap: wrap; }
 .chip {
   min-height: 56px;

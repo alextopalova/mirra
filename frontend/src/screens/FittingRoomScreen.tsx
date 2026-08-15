@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 import { useSession } from "../state/session";
 import { recommend, tryOn, ApiError } from "../api/client";
 import { GarmentCard } from "../components/GarmentCard";
@@ -121,6 +122,14 @@ export function FittingRoomScreen() {
 
   return (
     <div className="screen screen-wide fitting">
+      {/* The way back to the profile the rack was built from — a shopper who
+          wants to re-read "why these pieces" shouldn't have to start over.
+          It sits in the top-left corner opposite the fixed Home button, so
+          the two corner controls read as a pair rather than as one stray
+          button in the heading (see fitting.css). */}
+      <button className="back-btn" onClick={() => go("report")} aria-label="Back">
+        <ArrowLeft size={24} aria-hidden="true" />
+      </button>
       <h1 className="fitting-title">Your fitting room</h1>
 
       <div className="fitting-body">
@@ -157,14 +166,16 @@ export function FittingRoomScreen() {
             )}
             {tryOnError && <p className="preview-error">{tryOnError}</p>}
 
+            {/* Seeing the piece on yourself is what the mirror is for, so it
+                carries the solid weight; buying is the step after that, not
+                the one being asked for here. */}
             <div className="preview-actions">
               <PrimaryButton
                 label={tryOnBusy ? "Dressing you…" : preview ? "Try again" : "Try it on"}
-                variant="ghost"
                 disabled={!selected || tryOnBusy}
                 onClick={runTryOn}
               />
-              <PrimaryButton label="Buy" disabled={!selected} onClick={buy} />
+              <PrimaryButton label="Buy" variant="ghost" disabled={!selected} onClick={buy} />
             </div>
           </div>
 
@@ -172,30 +183,43 @@ export function FittingRoomScreen() {
 
         {/* The rack. Filters stay put; only this list re-fetches. */}
         <section className="rack">
+          {/* Unlabelled, the two rows of pills read as decoration. Each row
+              names what it filters, and the hint says out loud that the
+              rack answers to a tap — a kiosk has no hover to discover it
+              with. The visible label is the group's accessible name too
+              (aria-labelledby), so there's no second, invisible wording to
+              drift out of sync with it. */}
           <div className="filters">
-            <div className="chips" role="group" aria-label="Category">
-              {CATEGORIES.map((c) => (
-                <button
-                  key={c.key}
-                  className={`chip${c.key === category ? " is-active" : ""}`}
-                  aria-pressed={c.key === category}
-                  onClick={() => setCategory(c.key)}
-                >
-                  {c.label}
-                </button>
-              ))}
+            <p className="filters-hint">Tap to filter the rack</p>
+            <div className="filter-row">
+              <span className="filter-label" id="filter-category">Looking for</span>
+              <div className="chips" role="group" aria-labelledby="filter-category">
+                {CATEGORIES.map((c) => (
+                  <button
+                    key={c.key}
+                    className={`chip${c.key === category ? " is-active" : ""}`}
+                    aria-pressed={c.key === category}
+                    onClick={() => setCategory(c.key)}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="chips" role="group" aria-label="Occasion">
-              {OCCASIONS.map((o) => (
-                <button
-                  key={o}
-                  className={`chip${o === occasion ? " is-active" : ""}`}
-                  aria-pressed={o === occasion}
-                  onClick={() => setOccasion(o)}
-                >
-                  {o}
-                </button>
-              ))}
+            <div className="filter-row">
+              <span className="filter-label" id="filter-occasion">Wearing it to</span>
+              <div className="chips" role="group" aria-labelledby="filter-occasion">
+                {OCCASIONS.map((o) => (
+                  <button
+                    key={o}
+                    className={`chip${o === occasion ? " is-active" : ""}`}
+                    aria-pressed={o === occasion}
+                    onClick={() => setOccasion(o)}
+                  >
+                    {o}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

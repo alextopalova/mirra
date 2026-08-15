@@ -80,6 +80,15 @@
   transform-origin: 50% 50%;
 }
 
+/* Mirrored so the rotation reads the other way round. About the viewBox's
+   own centre (50,50), which is also the arc's centre, so the flip happens
+   in place rather than shifting the icon sideways. */
+.capture-feedback-arrow-mirror {
+  transform: scaleX(-1);
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+}
+
 .capture-feedback-text {
   font-size: clamp(28px, 6vw, 46px);
   font-weight: 700;

@@ -1,4 +1,5 @@
 import { useSession } from "../state/session";
+import { House } from "lucide-react";
 import "./StartOverButton.css";
 
 /**
@@ -11,7 +12,7 @@ export function StartOverButton() {
   if (screen === "start") return null;
   return (
     <button className="start-over-btn" onClick={reset} aria-label="Start over">
-      <span aria-hidden="true">↺</span>
+      <House size={24} />
     </button>
   );
 }

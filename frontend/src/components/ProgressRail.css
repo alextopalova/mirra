@@ -2,10 +2,10 @@
   flex-shrink: 0;
   /* Symmetric horizontal padding, and it has to stay symmetric: the track
      below centres itself inside this box, so clearing the fixed start-over
-     button with a bigger padding-left (as this used to) doesn't move the
-     button out of the way — it moves the whole rail right by half the
-     difference. 88px clears the button (16px offset + 56px wide) on the
-     left and is simply mirrored on the right. */
+     button with a bigger padding-right alone doesn't move the button out of
+     the way — it moves the whole rail left by half the difference. 88px
+     clears the button (16px offset + 56px wide) on the right, where it sits,
+     and is simply mirrored on the left. */
   padding: 20px 88px 16px;
 }
 

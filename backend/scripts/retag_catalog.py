@@ -107,8 +107,10 @@ def occasion_tags(g: dict) -> list[str]:
 
     # Wedding guest: dresses only, and only the ones that read as an
     # occasion — pale and delicate, or genuinely colourful, at a price that
-    # isn't a t-shirt's.
-    if cat == "dress" and price >= 1200 and (L > 78 or chroma > 30):
+    # isn't a t-shirt's. The threshold is in EUR (the currency the kiosk
+    # prints); it was 1200 when the catalog carried its source dataset's
+    # Indian-rupee prices, which no EUR-priced garment could ever clear.
+    if cat == "dress" and price >= 50 and (L > 78 or chroma > 30):
         tags.append("wedding guest")
 
     # Everyday is the floor, not a leftover: anything wearable to the shops

@@ -128,15 +128,18 @@
 }
 .capture-restart-message {
   font-size: clamp(20px, 3.2vw, 28px);
-  font-weight: 700;
-  color: var(--danger);
+  color: var(--font);
   max-width: 90%;
 }
 
-/* Only rendered when VITE_USE_MOCKS is on (see CaptureScreen). Styled as a
-   plain developer affordance — deliberately not a PrimaryButton, so it can
-   never be mistaken for part of the shopper-facing flow. */
+/* Dev-only affordance (see CaptureScreen): choose a photo from disk instead
+   of standing in frame. Deliberately not styled as a PrimaryButton so it
+   can never be mistaken for part of the shopper-facing flow — and it's a
+   <label> wrapping a hidden file input, hence the explicit inline-flex and
+   cursor that a <button> would have given for free. */
 .capture-skip {
+  display: inline-flex;
+  align-items: center;
   margin-top: 4px;
   padding: 10px 18px;
   border-radius: var(--radius-pill);
@@ -148,3 +151,18 @@
   cursor: pointer;
 }
 .capture-skip:hover { color: var(--ink); border-color: var(--ink); }
+
+/* Clipped to nothing but still rendered, so the file input keeps its place
+   in the tab order and its focus ring travels to the label around it. */
+.capture-skip-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.capture-skip:focus-within {
+  outline: 3px solid var(--accent-deep);
+  outline-offset: 3px;
+}

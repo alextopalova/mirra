@@ -1,644 +1,468 @@
 #!/usr/bin/env python3
-"""Rebuild backend/data/catalog.json from the public Kaggle
-"Fashion Product Images" dataset (paramaggarwal/fashion-product-images-dataset,
-MIT-licensed metadata; product photography originates from Myntra).
+"""Rebuild backend/data/catalog.json and backend/data/garments/*.jpg.
 
-What this script does, end to end:
+Source
+------
+Product photography comes from the Hugging Face dataset
+`yainage90/onthelook-fashion-anchor-positive-images` (MIT licence), a
+retrieval-training set built from **OnTheLook** (온더룩), a Korean fashion
+shopping/snap app. Each row pairs a street-snap crop (`anchor_image`) with
+the matching retail product shot (`positive_image`) and carries a coarse
+category label. We only ever use `positive_image` -- the clean, mostly
+white-background product shot, which is what the try-on endpoint needs to
+send YouCam as the garment reference. Provenance and licence are recorded
+in `backend/data/garments/SOURCE.md`.
 
-1. Fetches `styles.csv` (garment metadata: id, gender, articleType, colour,
-   ...) from a public GitHub mirror of the dataset
-   (mayank8200/Fashion-Product-Images-Classification), and `images.csv`
-   (id -> live image URL) by issuing a small HTTP Range request against the
-   Kaggle dataset zip -- `images.csv` is the *first* entry in that 24.77 GB
-   archive, so we can pull just its ~1.3 MB of compressed bytes instead of
-   downloading the whole thing (see `fetch_images_csv_via_range`).
-2. Filters to gender in {Women, Unisex, Girls} and maps `articleType` to our
-   three store categories (dress / top / pants), deliberately excluding
-   ethnic wear (kurtas, sarees, ...) to match this store's contemporary
-   Western assortment (consistent with the placeholder catalog it replaces).
-3. Picks a colour-diverse sample per category (round-robins across
-   `baseColour` buckets so we don't end up with five black tops) with a
-   buffer of extra candidates, in case a download fails or a photo turns
-   out unusable.
-4. Downloads each chosen image, resizes it (long side <= 1024px), and saves
-   it to backend/data/garments/<id>.jpg.
-5. Computes `color_hex` from the *actual downloaded image* (center-crop,
-   background/skin-pixel exclusion, median colour -- see
-   `dominant_garment_color`), derives `color_lab` via the app's own
-   `hex_to_lab`, and derives `season_tags` from that computed colour (never
-   from the dataset's retail-merchandising `season` column -- see the
-   module docstring in the module-level comment below for why that column
-   is unusable for personal-colour work).
-6. Fills in the remaining metadata (silhouette, occasion tags, name, price,
-   location, sizes) -- see `derive_silhouette_and_occasion` for exactly
-   which fields are derived from the dataset vs. hand-assigned.
+Why the rows are hard-coded
+---------------------------
+The 40 garments below were **hand-picked by eye** from contact sheets of
+several hundred candidates, for three things a filter can't judge:
 
-Re-run with: `python scripts/build_catalog.py` from `backend/` (venv active).
-Network access required; nothing here is used at test time.
+1. womenswear (the kiosk styles women; the dataset skews men's streetwear),
+2. a usable photo -- one garment, shot flat or on a model, not a colourway
+   collage, a rack of hangers, or a busy outdoor scene, and
+3. a colour spread wide enough that all four personal-colour seasons and
+   all three categories stay populated after tagging.
 
-NOTE on the dataset's `season` column: it's retail *merchandising* season
-(when Myntra stocked/marketed the item), not personal-colour season -- e.g.
-97% of watches are tagged "Winter" and 100% of perfume "Spring" in the raw
-data, and black (a canonical *Winter* palette colour) is 46% tagged
-"Summer". We never read that column; `season_tags` below is derived purely
-from the garment's own computed pixel colour.
+So this script does not re-run the selection; it re-downloads exactly the
+rows that were chosen, by their absolute dataset row index (stable for a
+given dataset revision), via the public datasets-server `/rows` endpoint.
+Everything else in each entry -- name, silhouette, price, sizes, aisle --
+is hand-authored here from looking at the photo, because the dataset ships
+no product text at all.
+
+`color_hex` is NOT hand-written: it is sampled from the downloaded pixels
+(`dominant_color`, plus a per-item crop window where the default window
+lands on background or on the model instead of the garment), and
+`color_lab` is derived from it with the app's own `hex_to_lab` so the two
+can never drift. `season_tags`/`occasion_tags` are placeholders here and
+are re-derived by `scripts/retag_catalog.py`, which this script runs at the
+end.
+
+Run from `backend/` with the venv active:
+
+    python scripts/build_catalog.py            # download + rebuild
+    python scripts/build_catalog.py --no-fetch # re-derive metadata only
+
+Network access required for the download; nothing here runs at test time.
 """
 
 from __future__ import annotations
 
 import argparse
-import colorsys
-import csv
 import io
 import json
-import random
 import ssl
-import struct
+import subprocess
 import sys
-import tempfile
-import zlib
+import time
 from pathlib import Path
 
 import certifi
 import httpx
+import numpy as np
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.reco.catalog import hex_to_lab  # noqa: E402
 
-# --------------------------------------------------------------------------
-# Paths / constants
-# --------------------------------------------------------------------------
-
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 GARMENTS_DIR = BACKEND_DIR / "data" / "garments"
 CATALOG_PATH = BACKEND_DIR / "data" / "catalog.json"
 
-STYLES_CSV_URL = (
-    "https://raw.githubusercontent.com/mayank8200/"
-    "Fashion-Product-Images-Classification/master/styles.csv"
-)
-KAGGLE_ZIP_URL = (
-    "https://www.kaggle.com/api/v1/datasets/download/"
-    "paramaggarwal/fashion-product-images-dataset"
-)
-
+DATASET = "yainage90/onthelook-fashion-anchor-positive-images"
+ROWS_URL = "https://datasets-server.huggingface.co/rows"
 SSL_CTX = ssl.create_default_context(cafile=certifi.where())
-
 TARGET_LONG_SIDE = 1024
-TARGET_COUNTS = {"dress": 13, "top": 14, "pants": 13}  # 40 total
-BUFFER_MULT = 2  # oversample candidates per bucket in case of download failures
 
-# NOTE: the brief said gender in {Women, Unisex, Girls}. We drop "Girls"
-# after inspection: those rows are literal children's-size garments (e.g.
-# "Doodle Kids Girls Party Frock", toddler leggings), which don't belong in
-# an adult in-store styling kiosk -- keeping them would look like a bug in
-# a judge's demo, not a stylistic choice. Women + Unisex cover the target
-# assortment fine on their own.
-ALLOWED_GENDERS = {"Women", "Unisex"}
-
-# A handful of rows are mislabeled gender="Women" in the raw dataset despite
-# clearly being children's wear by name/brand (e.g. id 27219, "Doodle Kids
-# Girl Printed Lavender Dress" -- "Doodle" is a kids' label, confirmed by
-# eye on the downloaded photo: toddler-proportioned garment). Belt-and-
-# braces text filter on top of the gender filter.
-_KIDS_KEYWORDS = ("kids", "kid ", "baby", "infant", "toddler", "doodle")
-
-# articleType -> our category. Deliberately excludes ethnic wear (Kurtas,
-# Kurtis, Sarees, Salwar, Churidar, Dupatta, ...) -- the existing catalog
-# this replaces is a contemporary Western assortment ("Wrap midi dress",
-# "Tailored charcoal trousers"), and mixing in a different wardrobe register
-# would make the body/colour scorers' comparisons less meaningful.
-CATEGORY_MAP: dict[str, str] = {
-    "Dresses": "dress",
-    "Tops": "top",
-    "Tshirts": "top",
-    "Shirts": "top",
-    "Tunics": "top",
-    "Jeans": "pants",
-    "Trousers": "pants",
-    "Track Pants": "pants",
-    "Leggings": "pants",
-    "Capris": "pants",
+# Default sampling window per category, as (x0, y0, x1, y1) fractions of the
+# image: the part of a product shot that is reliably the garment itself.
+DEFAULT_BOX = {
+    "dress": (0.28, 0.25, 0.72, 0.75),
+    "top": (0.20, 0.20, 0.80, 0.62),
+    "pants": (0.25, 0.32, 0.75, 0.90),
 }
 
-RNG_SEED = 20260809  # today's date at authoring time -- fixed for reproducibility
+# --------------------------------------------------------------------------
+# The catalog. `row` is the absolute row index in the dataset's train split.
+# `box` overrides DEFAULT_BOX where the default window misses the garment
+# (garment shot on a diagonal, worn by a model, tiny against a wide frame).
+# `crop` trims the stored image itself, for the one shot that carries a strip
+# of other colourways below the garment.
+# --------------------------------------------------------------------------
+
+ITEMS: list[dict] = [
+    # ---- dresses -------------------------------------------------------
+    # d1/d2 lead the dress rack deliberately: tests/test_engine.py reads
+    # `dresses[0]` as a garment that is Autumn-tagged *and* survives the
+    # "date night" filter, and pins "d2" as a dress that is not Autumn.
+    dict(id="d1", row=31700, category="dress", name="Ribbed Knit Mini Tank Dress",
+         price=39, sizes=["XS", "S", "M", "L"],
+         silhouette=dict(structured=False, fabric="smooth", neckline="round", waist="regular")),
+    dict(id="d2", row=39016, category="dress", name="Sleeveless Knit A-Line Midi Dress",
+         price=59, sizes=["S", "M", "L", "XL"],
+         silhouette=dict(structured=False, fabric="soft", neckline="round", waist="regular")),
+    dict(id="d3", row=6088, category="dress", name="Bubble Hem Mini Dress",
+         price=52, sizes=["XS", "S", "M"],
+         silhouette=dict(structured=True, fabric="crisp", neckline="round", waist="defined")),
+    dict(id="d4", row=10354, category="dress", name="Ditsy Print Collared Midi Dress",
+         price=58, sizes=["S", "M", "L"],
+         box=(0.38, 0.35, 0.62, 0.72),
+         silhouette=dict(structured=False, fabric="light", neckline="collared", waist="defined")),
+    dict(id="d5", row=10362, category="dress", name="Tie-Strap Ruched Mini Dress",
+         price=54, sizes=["XS", "S", "M", "L"],
+         silhouette=dict(structured=False, fabric="light", neckline="round", waist="defined")),
+    dict(id="d6", row=10374, category="dress", name="Balloon Hem Midi Dress",
+         price=68, sizes=["S", "M", "L"],
+         silhouette=dict(structured=False, fabric="soft", neckline="round", waist="regular")),
+    dict(id="d7", row=27070, category="dress", name="Tiered Shirt Dress",
+         price=72, sizes=["XS", "S", "M", "L", "XL"],
+         box=(0.30, 0.55, 0.70, 0.80), skin=False,
+         silhouette=dict(structured=True, fabric="crisp", neckline="collared", waist="defined")),
+    dict(id="d8", row=38984, category="dress", name="Satin Slip Midi Dress",
+         price=64, sizes=["XS", "S", "M", "L"],
+         box=(0.35, 0.30, 0.62, 0.70),
+         silhouette=dict(structured=False, fabric="draping", neckline="v", waist="regular")),
+    dict(id="d9", row=48337, category="dress", name="Poplin Shirt Dress",
+         price=66, sizes=["S", "M", "L"],
+         box=(0.36, 0.30, 0.64, 0.62),
+         silhouette=dict(structured=True, fabric="crisp", neckline="collared", waist="regular")),
+    dict(id="d10", row=66321, category="dress", name="Belted Wrap Coat Dress",
+         price=79, sizes=["XS", "S", "M", "L"],
+         silhouette=dict(structured=True, fabric="structured", neckline="v", waist="defined")),
+    dict(id="d11", row=91096, category="dress", name="Draped Neck Column Midi Dress",
+         price=55, sizes=["S", "M", "L"],
+         box=(0.35, 0.35, 0.65, 0.70), skin=False,
+         silhouette=dict(structured=False, fabric="smooth", neckline="round", waist="defined")),
+    dict(id="d12", row=91104, category="dress", name="Floral Satin Slip Midi Dress",
+         price=61, sizes=["XS", "S", "M", "L"],
+         silhouette=dict(structured=False, fabric="draping", neckline="v", waist="defined")),
+    dict(id="d13", row=91120, category="dress", name="Puff Sleeve Tiered Midi Dress",
+         price=57, sizes=["S", "M", "L", "XL"],
+         silhouette=dict(structured=False, fabric="light", neckline="round", waist="regular")),
+    dict(id="d14", row=31701, category="dress", name="Sleeveless A-Line Mini Dress",
+         price=47, sizes=["XS", "S", "M", "L"],
+         silhouette=dict(structured=True, fabric="crisp", neckline="round", waist="regular")),
+    dict(id="d15", row=38977, category="dress", name="Puff Sleeve Ruffle Mini Dress",
+         price=63, sizes=["S", "M", "L"],
+         box=(0.35, 0.45, 0.65, 0.75), skin=False,
+         silhouette=dict(structured=False, fabric="soft", neckline="round", waist="regular")),
+    dict(id="d16", row=48336, category="dress", name="Pleated Midi Dress",
+         price=74, sizes=["XS", "S", "M", "L", "XL"],
+         silhouette=dict(structured=True, fabric="crisp", neckline="round", waist="defined")),
+    dict(id="d17", row=48340, category="dress", name="Striped Belted Shirt Dress",
+         price=69, sizes=["S", "M", "L"],
+         silhouette=dict(structured=True, fabric="crisp", neckline="collared", waist="defined")),
+    dict(id="d18", row=66320, category="dress", name="Striped Ruffle Hem Mini Dress",
+         price=43, sizes=["XS", "S", "M"],
+         silhouette=dict(structured=False, fabric="textured", neckline="round", waist="regular")),
+    dict(id="d19", row=91075, category="dress", name="Houndstooth Cami Midi Dress",
+         price=56, sizes=["S", "M", "L"],
+         silhouette=dict(structured=False, fabric="smooth", neckline="v", waist="regular")),
+    dict(id="d20", row=91107, category="dress", name="Floral Cami Midi Dress",
+         price=49, sizes=["XS", "S", "M", "L"],
+         silhouette=dict(structured=False, fabric="light", neckline="v", waist="defined")),
+    dict(id="d21", row=31673, category="dress", name="Rib Knit Cami Midi Dress",
+         price=45, sizes=["S", "M", "L"],
+         box=(0.38, 0.35, 0.62, 0.72),
+         silhouette=dict(structured=False, fabric="smooth", neckline="round", waist="regular")),
+    # The first pick here (row 38993) was a yellow floral mini shot against a
+    # floral-wallpaper backdrop: unusable both for colour sampling and as a
+    # garment reference to hand the VTO. Swapped for a clean studio shot.
+    dict(id="d22", row=27069, category="dress", name="Puff Sleeve A-Line Dress",
+         price=51, sizes=["XS", "S", "M", "L"], skin=False,
+         silhouette=dict(structured=True, fabric="crisp", neckline="round", waist="regular")),
+    dict(id="d23", row=6091, category="dress", name="Draped Slip Midi Dress",
+         price=65, sizes=["S", "M", "L"],
+         box=(0.38, 0.30, 0.62, 0.70), skin=False,
+         silhouette=dict(structured=False, fabric="draping", neckline="round", waist="regular")),
+
+    # ---- tops ----------------------------------------------------------
+    dict(id="t1", row=13, category="top", name="Cropped Graphic Sweatshirt",
+         price=32, sizes=["XS", "S", "M", "L"],
+         box=(0.32, 0.30, 0.68, 0.60),
+         silhouette=dict(structured=False, fabric="soft", neckline="round", waist="regular")),
+    dict(id="t2", row=44, category="top", name="Cable Knit Cricket Jumper",
+         price=45, sizes=["S", "M", "L", "XL"],
+         silhouette=dict(structured=False, fabric="chunky", neckline="v", waist="regular")),
+    dict(id="t3", row=54, category="top", name="Brushed Wool Crewneck Jumper",
+         price=42, sizes=["XS", "S", "M", "L"],
+         crop=0.72,
+         silhouette=dict(structured=False, fabric="chunky", neckline="round", waist="regular")),
+    dict(id="t4", row=67, category="top", name="Mohair Stripe Knit Jumper",
+         price=47, sizes=["S", "M", "L"],
+         box=(0.32, 0.35, 0.68, 0.62), hex_bin=1,
+         silhouette=dict(structured=False, fabric="chunky", neckline="round", waist="regular")),
+    dict(id="t5", row=70, category="top", name="Pigment Dyed Hoodie",
+         price=38, sizes=["XS", "S", "M", "L", "XL"],
+         silhouette=dict(structured=False, fabric="soft", neckline="round", waist="regular")),
+    dict(id="t6", row=112, category="top", name="Boxy Logo T-Shirt",
+         price=19, sizes=["S", "M", "L"],
+         silhouette=dict(structured=False, fabric="soft", neckline="round", waist="regular")),
+    dict(id="t7", row=120, category="top", name="Fine Knit Button Cardigan",
+         price=41, sizes=["XS", "S", "M", "L"],
+         silhouette=dict(structured=False, fabric="soft", neckline="v", waist="regular")),
+    dict(id="t8", row=125, category="top", name="Washed Graphic Hoodie",
+         price=36, sizes=["S", "M", "L", "XL"],
+         silhouette=dict(structured=False, fabric="soft", neckline="round", waist="regular")),
+    dict(id="t9", row=1155, category="top", name="Ribbed Short Sleeve Knit Top",
+         price=27, sizes=["XS", "S", "M", "L"],
+         silhouette=dict(structured=False, fabric="textured", neckline="round", waist="regular")),
+    dict(id="t10", row=1165, category="top", name="Pinstripe Oversized Shirt",
+         price=34, sizes=["S", "M", "L"],
+         silhouette=dict(structured=True, fabric="crisp", neckline="collared", waist="regular")),
+    dict(id="t11", row=1169, category="top", name="Short Sleeve Camp Shirt",
+         price=29, sizes=["XS", "S", "M", "L", "XL"],
+         silhouette=dict(structured=True, fabric="crisp", neckline="collared", waist="regular")),
+    dict(id="t12", row=1186, category="top", name="Gingham Short Sleeve Shirt",
+         price=31, sizes=["S", "M", "L"],
+         box=(0.35, 0.35, 0.65, 0.62), skin=False,
+         silhouette=dict(structured=True, fabric="crisp", neckline="collared", waist="regular")),
+    dict(id="t13", row=1188, category="top", name="Lace Trim Rib Camisole",
+         price=22, sizes=["XS", "S", "M"],
+         silhouette=dict(structured=False, fabric="smooth", neckline="v", waist="regular")),
+    dict(id="t14", row=1189, category="top", name="Poplin Short Sleeve Shirt",
+         price=28, sizes=["S", "M", "L", "XL"],
+         silhouette=dict(structured=True, fabric="crisp", neckline="collared", waist="regular")),
+    dict(id="t15", row=1336, category="top", name="Ribbed Tank Top",
+         price=18, sizes=["XS", "S", "M"],
+         silhouette=dict(structured=False, fabric="textured", neckline="round", waist="regular")),
+    dict(id="t16", row=1232, category="top", name="Wool Blend Knit Cardigan",
+         price=52, sizes=["S", "M", "L", "XL"],
+         silhouette=dict(structured=False, fabric="chunky", neckline="v", waist="regular")),
+    dict(id="t17", row=6012, category="top", name="Striped Mohair Jumper",
+         price=44, sizes=["XS", "S", "M", "L"],
+         box=(0.34, 0.22, 0.66, 0.45), skin=False,
+         silhouette=dict(structured=False, fabric="chunky", neckline="round", waist="regular")),
+    dict(id="t18", row=6068, category="top", name="Breton Stripe Long Sleeve Tee",
+         price=26, sizes=["S", "M", "L"],
+         silhouette=dict(structured=False, fabric="soft", neckline="round", waist="regular")),
+    dict(id="t19", row=6076, category="top", name="Knit Polo Top",
+         price=39, sizes=["XS", "S", "M", "L"],
+         skin=False,
+         silhouette=dict(structured=False, fabric="textured", neckline="collared", waist="regular")),
+    dict(id="t20", row=10305, category="top", name="Fine Knit Roll Neck",
+         price=33, sizes=["S", "M", "L", "XL"],
+         silhouette=dict(structured=False, fabric="smooth", neckline="round", waist="regular")),
+    dict(id="t21", row=10329, category="top", name="Ribbed High Neck Sleeveless Top",
+         price=24, sizes=["XS", "S", "M"],
+         silhouette=dict(structured=False, fabric="textured", neckline="round", waist="regular")),
+    dict(id="t22", row=38965, category="top", name="Ribbon Tie Baby Tee",
+         price=21, sizes=["XS", "S", "M", "L"],
+         skin=False,
+         silhouette=dict(structured=False, fabric="soft", neckline="round", waist="regular")),
+    dict(id="t23", row=128, category="top", name="Oversized Graphic Sweatshirt",
+         price=37, sizes=["S", "M", "L", "XL"],
+         skin=False,
+         silhouette=dict(structured=False, fabric="soft", neckline="round", waist="regular")),
+    dict(id="t24", row=1312, category="top", name="Short Sleeve Knit Polo",
+         price=35, sizes=["XS", "S", "M", "L"],
+         silhouette=dict(structured=False, fabric="textured", neckline="collared", waist="regular")),
+
+    # ---- pants ---------------------------------------------------------
+    dict(id="p1", row=882, category="pants", name="Tailored Wide Leg Trousers",
+         price=58, sizes=["XS", "S", "M", "L"],
+         silhouette=dict(structured=True, fabric="crisp", neckline="n-a", waist="high")),
+    dict(id="p2", row=884, category="pants", name="Pleated Corduroy Trousers",
+         price=49, sizes=["S", "M", "L"],
+         box=(0.30, 0.35, 0.70, 0.70), skin=False,
+         silhouette=dict(structured=True, fabric="textured", neckline="n-a", waist="high")),
+    dict(id="p3", row=887, category="pants", name="Balloon Leg Jeans",
+         price=62, sizes=["XS", "S", "M", "L", "XL"],
+         silhouette=dict(structured=True, fabric="textured", neckline="n-a", waist="regular")),
+    dict(id="p4", row=889, category="pants", name="Cotton Twill Straight Trousers",
+         price=46, sizes=["S", "M", "L"],
+         silhouette=dict(structured=True, fabric="natural", neckline="n-a", waist="regular")),
+    dict(id="p5", row=894, category="pants", name="Pleated Wide Chinos",
+         price=52, sizes=["XS", "S", "M", "L"],
+         box=(0.35, 0.40, 0.65, 0.75), skin=False,
+         silhouette=dict(structured=True, fabric="smooth", neckline="n-a", waist="high")),
+    dict(id="p6", row=899, category="pants", name="Rigid Denim Straight Jeans",
+         price=67, sizes=["S", "M", "L", "XL"],
+         silhouette=dict(structured=True, fabric="textured", neckline="n-a", waist="regular")),
+    dict(id="p7", row=928, category="pants", name="Pleated Wide Leg Trousers",
+         price=54, sizes=["XS", "S", "M", "L"],
+         silhouette=dict(structured=True, fabric="smooth", neckline="n-a", waist="high")),
+    dict(id="p8", row=934, category="pants", name="Wide Leg Ecru Jeans",
+         price=59, sizes=["S", "M", "L"],
+         silhouette=dict(structured=True, fabric="textured", neckline="n-a", waist="regular")),
+    dict(id="p9", row=936, category="pants", name="Washed Baggy Jeans",
+         price=63, sizes=["XS", "S", "M", "L", "XL"],
+         silhouette=dict(structured=True, fabric="textured", neckline="n-a", waist="regular")),
+    dict(id="p10", row=958, category="pants", name="Tartan Check Trousers",
+         price=48, sizes=["S", "M", "L"],
+         silhouette=dict(structured=True, fabric="crisp", neckline="n-a", waist="regular")),
+    dict(id="p11", row=973, category="pants", name="Stonewash Wide Jeans",
+         price=57, sizes=["XS", "S", "M", "L"],
+         silhouette=dict(structured=True, fabric="textured", neckline="n-a", waist="regular")),
+    dict(id="p12", row=976, category="pants", name="Parachute Cargo Trousers",
+         price=44, sizes=["S", "M", "L", "XL"],
+         silhouette=dict(structured=False, fabric="light", neckline="n-a", waist="regular")),
+    dict(id="p13", row=984, category="pants", name="Drawstring Wide Trousers",
+         price=51, sizes=["XS", "S", "M", "L"],
+         box=(0.40, 0.50, 0.60, 0.80), skin=False,
+         silhouette=dict(structured=False, fabric="draping", neckline="n-a", waist="high")),
+    dict(id="p14", row=1080, category="pants", name="Parachute Trousers",
+         price=45, sizes=["S", "M", "L"],
+         silhouette=dict(structured=False, fabric="light", neckline="n-a", waist="regular")),
+    dict(id="p15", row=1011, category="pants", name="Straight Leg Wool Trousers",
+         price=56, sizes=["XS", "S", "M", "L"],
+         silhouette=dict(structured=True, fabric="smooth", neckline="n-a", waist="regular")),
+    dict(id="p16", row=966, category="pants", name="Balloon Leg Cargo Trousers",
+         price=50, sizes=["S", "M", "L", "XL"],
+         skin=False,
+         silhouette=dict(structured=False, fabric="natural", neckline="n-a", waist="regular")),
+    dict(id="p17", row=926, category="pants", name="Wide Leg Utility Trousers",
+         price=53, sizes=["XS", "S", "M", "L"],
+         skin=False,
+         silhouette=dict(structured=True, fabric="natural", neckline="n-a", waist="high")),
+    dict(id="p18", row=1056, category="pants", name="Wide Leg Twill Trousers",
+         price=55, sizes=["S", "M", "L"],
+         skin=False,
+         silhouette=dict(structured=True, fabric="crisp", neckline="n-a", waist="high")),
+    dict(id="p19", row=933, category="pants", name="Corduroy Straight Trousers",
+         price=61, sizes=["XS", "S", "M", "L", "XL"],
+         silhouette=dict(structured=True, fabric="textured", neckline="n-a", waist="regular")),
+    dict(id="p20", row=1023, category="pants", name="Camo Print Cargo Trousers",
+         price=47, sizes=["S", "M", "L"],
+         skin=False,
+         silhouette=dict(structured=True, fabric="natural", neckline="n-a", waist="regular")),
+    dict(id="p21", row=1071, category="pants", name="Distressed Wide Jeans",
+         price=64, sizes=["XS", "S", "M", "L"],
+         silhouette=dict(structured=True, fabric="textured", neckline="n-a", waist="regular")),
+    dict(id="p22", row=987, category="pants", name="Cotton Jogger Trousers",
+         price=42, sizes=["S", "M", "L", "XL"],
+         silhouette=dict(structured=False, fabric="soft", neckline="n-a", waist="relaxed")),
+    dict(id="p23", row=911, category="pants", name="Pleated Camel Trousers",
+         price=57, sizes=["XS", "S", "M", "L"],
+         box=(0.35, 0.40, 0.65, 0.80), skin=False,
+         silhouette=dict(structured=True, fabric="smooth", neckline="n-a", waist="high")),
+]
+
+LOCATION = {
+    "dress": "Women's · Aisle 3 · Dresses",
+    "top": "Women's · Aisle 2 · Tops",
+    "pants": "Women's · Aisle 5 · Trousers",
+}
 
 
 # --------------------------------------------------------------------------
-# Step 1: fetch source data
+# Download
 # --------------------------------------------------------------------------
 
-def fetch_styles_csv(cache_dir: Path) -> Path:
-    dest = cache_dir / "styles.csv"
-    if dest.exists():
-        return dest
-    with httpx.Client(verify=SSL_CTX, follow_redirects=True, timeout=60) as client:
-        resp = client.get(STYLES_CSV_URL)
-        resp.raise_for_status()
-        dest.write_bytes(resp.content)
-    return dest
+def _get_with_retry(client: httpx.Client, url: str, **kwargs) -> httpx.Response:
+    """GET with backoff. The datasets-server rate-limits (429) well inside a
+    70-request run, and answers 5xx while it warms a cold dataset."""
+    delay = 2.0
+    for attempt in range(8):
+        resp = client.get(url, **kwargs)
+        if resp.status_code < 400:
+            return resp
+        if resp.status_code not in (429, 500, 502, 503, 504):
+            resp.raise_for_status()
+        time.sleep(delay)
+        delay = min(delay * 2, 60)
+    resp.raise_for_status()
+    return resp
 
 
-def fetch_images_csv_via_range(cache_dir: Path) -> Path:
-    """Pull `images.csv` out of the 24.77 GB Kaggle zip without downloading
-    the archive. `images.csv` is the zip's first entry; its *local file
-    header* (which precedes the entry's compressed bytes) tells us exactly
-    how many bytes to fetch, so a single small Range request suffices.
-    """
-    dest = cache_dir / "images.csv"
-    if dest.exists():
-        return dest
-
-    with httpx.Client(verify=SSL_CTX, follow_redirects=True, timeout=60) as client:
-        # 2MB is comfortably more than the ~1.3MB compressed size observed
-        # for this entry; if the dataset is ever repacked and this stops
-        # being enough, the assert below fails loudly rather than silently
-        # truncating.
-        resp = client.get(KAGGLE_ZIP_URL, headers={"Range": "bytes=0-2000000"})
-        resp.raise_for_status()
-        data = resp.content
-
-    assert data[0:4] == b"PK\x03\x04", "expected a zip local file header first"
-    (_version, _flags, method, _mtime, _mdate, _crc32, comp_size, uncomp_size,
-     fname_len, extra_len) = struct.unpack("<HHHHHIIIHH", data[4:30])
-
-    fname = data[30:30 + fname_len].decode()
-    assert fname.endswith("images.csv"), f"unexpected first zip entry: {fname}"
-    extra = data[30 + fname_len:30 + fname_len + extra_len]
-
-    if comp_size == 0xFFFFFFFF:
-        # Sizes overflow 32 bits -> stored in the Zip64 extra field instead:
-        # header id(2) size(2) uncompressed(8) compressed(8).
-        eid, _esize = struct.unpack("<HH", extra[0:4])
-        assert eid == 0x0001, "expected a Zip64 extra field"
-        uncomp_size, comp_size = struct.unpack("<QQ", extra[4:20])
-
-    data_start = 30 + fname_len + extra_len
-    comp_data = data[data_start:data_start + comp_size]
-    assert len(comp_data) >= comp_size, (
-        f"need {comp_size} bytes of compressed data, only fetched "
-        f"{len(comp_data)} -- widen the Range request above"
+def fetch_row_image(client: httpx.Client, row: int) -> Image.Image:
+    """Fetch one row's `positive_image` (the retail product shot)."""
+    resp = _get_with_retry(
+        client,
+        ROWS_URL,
+        params={"dataset": DATASET, "config": "default", "split": "train",
+                "offset": row, "length": 1},
     )
-
-    raw = zlib.decompress(comp_data, -15) if method == 8 else comp_data
-    assert len(raw) == uncomp_size, "decompressed size mismatch"
-
-    dest.write_bytes(raw)
-    return dest
-
-
-# --------------------------------------------------------------------------
-# Step 2: parse + filter
-# --------------------------------------------------------------------------
-
-def read_styles_tolerant(path: Path) -> list[dict]:
-    """22 rows in styles.csv have an unescaped comma inside
-    `productDisplayName`, which makes that row parse with 11 fields instead
-    of 10. Recombine the trailing overflow fields back into the name column
-    rather than dropping/misaligning the row.
-    """
-    with path.open(newline="", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        header = next(reader)
-        n = len(header)
-        rows = []
-        for raw in reader:
-            if len(raw) > n:
-                raw = raw[: n - 1] + [",".join(raw[n - 1:])]
-            if len(raw) != n:
-                continue  # truly malformed row (none expected, but stay safe)
-            rows.append(dict(zip(header, raw)))
-    return rows
+    payload = resp.json()["rows"][0]["row"]
+    if payload["category"] not in (1, 2, 6):  # bottom / dress / top
+        raise RuntimeError(f"row {row} is no longer a garment row: {payload['category']}")
+    img_resp = _get_with_retry(client, payload["positive_image"]["src"])
+    return Image.open(io.BytesIO(img_resp.content)).convert("RGB")
 
 
-def read_images_csv(path: Path) -> dict[str, str]:
-    with path.open(newline="", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        next(reader)  # header: filename,link
-        out = {}
-        for filename, link in reader:
-            out[filename.removesuffix(".jpg")] = link
-    return out
-
-
-# --------------------------------------------------------------------------
-# Step 3: colour-diverse candidate selection
-# --------------------------------------------------------------------------
-
-def select_candidates(
-    rows: list[dict], images: dict[str, str], rng: random.Random
-) -> dict[str, list[dict]]:
-    by_category: dict[str, list[dict]] = {"dress": [], "top": [], "pants": []}
-    for row in rows:
-        if row["gender"] not in ALLOWED_GENDERS:
-            continue
-        if row["masterCategory"] != "Apparel":
-            continue
-        category = CATEGORY_MAP.get(row["articleType"])
-        if category is None:
-            continue
-        if row["id"] not in images:
-            continue
-        if any(k in row["productDisplayName"].lower() for k in _KIDS_KEYWORDS):
-            continue
-        by_category[category].append(row)
-
-    selected: dict[str, list[dict]] = {}
-    for category, candidates in by_category.items():
-        buckets: dict[str, list[dict]] = {}
-        for row in candidates:
-            buckets.setdefault(row["baseColour"], []).append(row)
-        for bucket in buckets.values():
-            rng.shuffle(bucket)
-        bucket_names = list(buckets.keys())
-        rng.shuffle(bucket_names)
-
-        want = TARGET_COUNTS[category] * BUFFER_MULT
-        picked: list[dict] = []
-        idx = 0
-        while len(picked) < want and any(buckets[b] for b in bucket_names):
-            bucket = bucket_names[idx % len(bucket_names)]
-            if buckets[bucket]:
-                picked.append(buckets[bucket].pop())
-            idx += 1
-        selected[category] = picked
-    return selected
-
-
-# --------------------------------------------------------------------------
-# Step 4/5: download, resize, compute colour
-# --------------------------------------------------------------------------
-
-# Vertical crop window (fraction of image height) per category, tuned so
-# the sample window covers the garment itself and not whatever else the
-# model is wearing above/below it. These are on-model, front-facing,
-# roughly consistently-framed product shots (head near the top, feet near
-# the bottom) -- see backend/data/garments/SOURCE.md.
-_CROP_Y_BY_CATEGORY = {
-    "top": (0.20, 0.60),      # torso only -- stop above any visible jeans/skirt
-    "pants": (0.25, 0.95),    # waist to ankle
-    "dress": (0.20, 0.90),    # a dress spans nearly the full body height
-}
-_CROP_X = (0.15, 0.85)
-
-
-def dominant_garment_color(img: Image.Image, category: str) -> str:
-    """Sample the garment's dominant colour, excluding background and skin.
-
-    Two things matter more than they might look:
-
-    1. Skin detection must be done in YCbCr (the standard
-       Chai & Ngan skin-locus range), not a loose RGB "R>G>B-ish" rule.
-       An RGB heuristic also matches saturated warm fabric (mustard,
-       gold, orange) -- it silently deleted every mustard-yellow garment's
-       actual pixels in an earlier version of this script, leaving only
-       background/other-garment pixels behind.
-    2. The dominant colour must be found as the largest cluster in a
-       coarse colour histogram ("mode"), not a per-channel-independent
-       median. Many of these photos are front-facing model shots where a
-       second garment (jeans below a top, a contrasting top above
-       leggings) is also visible in the frame; if that second garment
-       survives the crop/skin/background filters, a per-channel median
-       blends the two into a colour that appears in neither -- e.g. navy
-       leggings + a coral top's median came out magenta. The category-
-       aware crop above minimizes that contamination, and taking the
-       mode of a same 3D colour histogram picks the single largest true
-       cluster instead of averaging across clusters.
-    """
-    import numpy as np
-
-    rgb = img.convert("RGB")
-    w, h = rgb.size
-    y0, y1 = _CROP_Y_BY_CATEGORY[category]
-    x0, x1 = _CROP_X
-    crop = rgb.crop((int(w * x0), int(h * y0), int(w * x1), int(h * y1)))
-    arr = np.asarray(crop).reshape(-1, 3).astype(np.float32)
-    r, g, b = arr[:, 0], arr[:, 1], arr[:, 2]
-
-    not_white = ~((r > 225) & (g > 225) & (b > 225))
-    cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b
-    cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b
-    skin = (cb >= 77) & (cb <= 127) & (cr >= 133) & (cr <= 173)
-    mask = not_white & ~skin
-
-    kept = arr[mask]
-    if kept.shape[0] < 0.03 * arr.shape[0]:
-        kept = arr[not_white]  # background-only shots: skip the skin filter
-    if kept.shape[0] == 0:
-        kept = arr
-
-    # Long, dark, straight hair draping over the shoulders/chest is common
-    # in these shots and survives the skin filter (it isn't skin-toned).
-    # Treat near-black pixels as probable hair/shadow and exclude them --
-    # *unless* they're clearly the majority of the crop (a genuinely black
-    # garment). Only applied to tops/dresses, where hair can fall across
-    # the crop window: pants crops are lower-body and dark navy/charcoal
-    # leggings are common there, so the same rule would misclassify the
-    # garment itself as "hair".
-    pool = kept
-    if category in ("top", "dress"):
-        is_near_black = kept.max(axis=1) < 40
-        if is_near_black.mean() <= 0.55:
-            pool = kept[~is_near_black]
-            if pool.shape[0] == 0:
-                pool = kept
-
-    bins = 24
-    idx = np.clip((pool / (256 / bins)).astype(np.int32), 0, bins - 1)
-    flat = idx[:, 0] * bins * bins + idx[:, 1] * bins + idx[:, 2]
-    counts = np.bincount(flat, minlength=bins ** 3)
-    top_bin = int(counts.argmax())
-    bz, by, bx = top_bin % bins, (top_bin // bins) % bins, top_bin // (bins * bins)
-    in_bin = (idx[:, 0] == bx) & (idx[:, 1] == by) & (idx[:, 2] == bz)
-    rep = pool[in_bin].mean(axis=0)
-    return "#%02X%02X%02X" % tuple(int(c) for c in rep)
-
-
-def download_and_process(url: str, dest: Path, client: httpx.Client, category: str) -> str | None:
-    try:
-        resp = client.get(url, timeout=20)
-        resp.raise_for_status()
-        img = Image.open(io.BytesIO(resp.content))
-        img.load()
-    except Exception:
-        return None
-
-    if min(img.size) < 300:
-        return None  # too small to be a usable product shot
-
+def save_image(img: Image.Image, dest: Path, crop: float | None) -> None:
+    if crop is not None:
+        w, h = img.size
+        img = img.crop((0, 0, w, int(h * crop)))
     w, h = img.size
     if max(w, h) > TARGET_LONG_SIDE:
         scale = TARGET_LONG_SIDE / max(w, h)
         img = img.resize((round(w * scale), round(h * scale)), Image.LANCZOS)
-
-    hex_color = dominant_garment_color(img, category)
-    img.convert("RGB").save(dest, "JPEG", quality=85, optimize=True)
-    return hex_color
+    img.save(dest, "JPEG", quality=88, optimize=True)
 
 
 # --------------------------------------------------------------------------
-# Step 6: derive metadata
+# Colour
 # --------------------------------------------------------------------------
 
-def derive_season_tags(hex_color: str) -> list[str]:
-    """warm/cool x light/deep -> spring/autumn/summer/winter, computed
-    purely from the garment's own pixel colour (never the dataset's
-    `season` column -- see module docstring)."""
-    h = hex_color.lstrip("#")
-    r, g, b = (int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
-    hue, sat, _val = colorsys.rgb_to_hsv(r, g, b)
-    hue_deg = hue * 360
-
-    L, _a, b_lab = hex_to_lab(hex_color)
-
-    if sat < 0.12:
-        # Near-neutral (grey/black/white/beige): hue is unstable, so fall
-        # back to the Lab b* axis (yellow- vs blue-based undertone).
-        warm = b_lab > 0
-    else:
-        warm = hue_deg < 90 or hue_deg >= 330
-
-    light = L >= 50
-
-    if warm and light:
-        return ["spring"]
-    if warm and not light:
-        return ["autumn"]
-    if not warm and light:
-        return ["summer"]
-    return ["winter"]
+_BINS = 16
 
 
-_STRUCTURED_TYPES = {"Shirts", "Jeans", "Trousers"}
-_SOFT_TYPES = {"Tshirts", "Track Pants", "Leggings"}
-
-_FABRIC_BY_TYPE = {
-    "Dresses": "soft",
-    "Tops": "smooth",
-    "Tshirts": "soft",
-    "Shirts": "crisp",
-    "Tunics": "soft",
-    "Jeans": "textured",
-    "Trousers": "smooth",
-    "Track Pants": "chunky",
-    "Leggings": "soft",
-    "Capris": "smooth",
-}
-
-_WAIST_BY_TYPE = {
-    "Jeans": "defined",
-    "Trousers": "regular",
-    "Track Pants": "relaxed",
-    "Leggings": "high",
-    "Capris": "regular",
-}
-
-_OCCASION_BY_USAGE = {
-    "Formal": "work",
-    "Party": "date night",
-    "Casual": "everyday",
-    "Smart Casual": "everyday",
-    "Ethnic": "wedding guest",
-    "Travel": "everyday",
-    "Sports": "everyday",
-}
+def _bin_index(pixels: np.ndarray) -> np.ndarray:
+    idx = np.clip((pixels / (256 / _BINS)).astype(np.int32), 0, _BINS - 1)
+    return idx[:, 0] * _BINS * _BINS + idx[:, 1] * _BINS + idx[:, 2]
 
 
-def derive_silhouette_and_occasion(row: dict) -> tuple[dict, list[str]]:
-    """Silhouette + occasion tags. The dataset's own signal here is thin
-    (`usage` has only 29 "Party" rows out of ~44k), so:
+def dominant_color(path: Path, box: tuple[float, float, float, float], bin_rank: int = 0,
+                   skin_filter: bool = True) -> str:
+    """Modal colour of a window of the product shot.
 
-    - `fabric`, base `structured`, `waist` (for bottoms) are DERIVED from
-      `articleType` via the lookup tables above (a reasonable, honest
-      generalisation -- "Jeans are textured/defined-waist", etc).
-    - `neckline` is DERIVED from keywords in `productDisplayName` where
-      present (e.g. "V Neck", "Round Neck", "Polo"), else HAND-ASSIGNED to
-      a sensible default per category.
-    - `occasion_tags` are DERIVED from the dataset's `usage` column where
-      it's informative, plus a HAND-ASSIGNED "everyday" fallback so every
-      item has at least one tag (usage is "Casual" for the vast majority,
-      which already maps to "everyday").
-    - dress `waist` is HAND-ASSIGNED from name keywords (bodycon/wrap ->
-      defined, shift -> regular, maxi/kaftan -> relaxed) with "regular" as
-      the default when no keyword matches.
+    Three things this has to survive, all of them present in these photos:
+
+    1. **Background.** The garment is shot on white or pale grey and often
+       fills less than half the window (a pair of trousers is a narrow
+       vertical band). A per-channel mean, or a plain histogram mode, comes
+       back "white". So the colours that dominate a thin frame around the
+       *whole* image are treated as background and dropped.
+    2. **Skin.** Roughly a third of these are worn by a model. Skin is
+       excluded on the standard YCbCr skin locus rather than an RGB
+       "reddish" rule, which would also delete mustard and rust fabric.
+    3. **Two-tone garments.** `bin_rank` selects a lower-ranked cluster, so
+       a black-and-teal striped jumper can be tagged with the teal that
+       identifies it instead of with the black half of the stripe.
     """
-    article = row["articleType"]
-    name = row["productDisplayName"].lower()
+    arr = np.asarray(Image.open(path).convert("RGB")).astype(np.float32)
+    h, w, _ = arr.shape
 
-    fabric = _FABRIC_BY_TYPE.get(article, "smooth")
-    structured = article in _STRUCTURED_TYPES
+    # Background = the modal colours of a 2% frame around the image edge.
+    bw, bh = max(2, int(0.02 * w)), max(2, int(0.02 * h))
+    border = np.concatenate([
+        arr[:bh].reshape(-1, 3), arr[-bh:].reshape(-1, 3),
+        arr[:, :bw].reshape(-1, 3), arr[:, -bw:].reshape(-1, 3),
+    ])
+    border_counts = np.bincount(_bin_index(border), minlength=_BINS ** 3)
+    bg_bins = [int(b) for b in np.argsort(border_counts)[-3:]
+               if border_counts[b] > 0.05 * len(border)]
 
-    if article == "Dresses":
-        if any(k in name for k in ("bodycon", "wrap")):
-            waist = "defined"
-        elif any(k in name for k in ("maxi", "kaftan", "shirt dress")):
-            waist = "relaxed"
-        else:
-            waist = "regular"
-        structured = "shirt dress" in name or "blazer dress" in name
+    x0, y0, x1, y1 = box
+    crop = arr[int(h * y0):int(h * y1), int(w * x0):int(w * x1)].reshape(-1, 3)
+    r, g, b = crop[:, 0], crop[:, 1], crop[:, 2]
+    cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b
+    cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b
+    span = crop.max(axis=1) - crop.min(axis=1)
+    if skin_filter:
+        skin = ((cb >= 77) & (cb <= 127) & (cr >= 133) & (cr <= 173)
+                & (crop.max(axis=1) > 60) & (span > 8))
     else:
-        waist = _WAIST_BY_TYPE.get(article, "regular")
+        # Tan, khaki, camel and blush fabrics sit squarely inside the skin
+        # locus, so the filter is switched off for the items whose sampling
+        # window contains no skin anyway (flat shots, mannequins, and the
+        # legs-only window on the one worn trouser shot).
+        skin = np.zeros(len(crop), bool)
 
-    if "v neck" in name or "v-neck" in name:
-        neckline = "v"
-    elif "round neck" in name:
-        neckline = "round"
-    elif "polo" in name:
-        neckline = "collared"
-    elif "collar" in name or article in ("Shirts",):
-        neckline = "collared"
-    elif "halter" in name:
-        neckline = "halter"
-    elif "square" in name:
-        neckline = "square"
-    elif article == "Dresses":
-        neckline = "round"  # hand-assigned default for dresses
-    else:
-        neckline = "round"  # hand-assigned default
+    flat = _bin_index(crop)
+    keep = ~skin & ~np.isin(flat, bg_bins)
+    if keep.sum() < 0.03 * len(flat):  # window is essentially all background
+        keep = ~skin
+    if keep.sum() == 0:
+        keep = np.ones(len(flat), bool)
 
-    occasions: set[str] = set()
-    usage = row.get("usage", "")
-    if usage in _OCCASION_BY_USAGE:
-        occasions.add(_OCCASION_BY_USAGE[usage])
-    if any(k in name for k in ("party", "cocktail")):
-        occasions.add("date night")
-    if any(k in name for k in ("formal", "office")):
-        occasions.add("work")
-    if not occasions:
-        occasions.add("everyday")  # hand-assigned fallback
-
-    silhouette = {
-        "structured": structured,
-        "fabric": fabric,
-        "neckline": neckline,
-        "waist": waist,
-    }
-    return silhouette, sorted(occasions)
-
-
-# Multi-word brand names in this dataset that a single-token strip would
-# mangle (e.g. "French Connection Women Grey Melange Dress" ->  naive
-# single-word strip leaves "Connection Grey Melange Dress"). HAND-CURATED
-# from the ~40 selected rows, not a general brand database.
-_MULTI_WORD_BRANDS = [
-    "French Connection", "Vero Moda", "Latin Quarters", "Jealous 21",
-    "Kraus Jeans", "United Colors of Benetton", "Little Miss",
-    "Global Desi", "Wills Lifestyle", "Forever New",
-]
-
-
-def clean_name(product_display_name: str, article_type: str) -> str:
-    """Tidy the dataset's productDisplayName into a clean retail name.
-    Strips the brand prefix and gender noise words -- HAND-TUNED cleanup
-    (with a hand-curated brand list above for the multi-word cases), not a
-    general NLP solution."""
-    name = product_display_name.strip()
-    for noise in ("Women's ", "Women ", "Girls' ", "Girls ", "Unisex "):
-        name = name.replace(noise, "")
-
-    for brand in _MULTI_WORD_BRANDS:
-        if name.startswith(brand + " "):
-            name = name[len(brand) + 1:]
-            break
-    else:
-        words = name.split()
-        # Drop a leading single-word brand token if the rest of the name
-        # still describes the garment on its own (heuristic: more than 2
-        # words remain).
-        if len(words) > 3:
-            name = " ".join(words[1:])
-
-    return name.strip().strip(",")
-
-
-_LOCATION_SECTION = {
-    "dress": "Dresses",
-    "top": "Tops",
-    "pants": "Pants",
-}
-_LOCATION_AISLE = {"dress": 3, "top": 2, "pants": 5}
-
-_PRICE_RANGE = {"dress": (850, 2300), "top": (450, 1300), "pants": (600, 1650)}
-
-_SIZE_SETS = [
-    ["XS", "S", "M"],
-    ["S", "M", "L"],
-    ["XS", "S", "M", "L"],
-    ["S", "M", "L", "XL"],
-    ["XS", "S", "M", "L", "XL"],
-]
-
-
-def build_entry(row: dict, category: str, hex_color: str, rng: random.Random) -> dict:
-    silhouette, occasion_tags = derive_silhouette_and_occasion(row)
-    lo, hi = _PRICE_RANGE[category]
-    price = rng.randrange(lo, hi, 10)
-    return {
-        "id": row["id"],
-        "name": clean_name(row["productDisplayName"], row["articleType"]),
-        "category": category,
-        "image_url": f"/garments/{row['id']}.jpg",
-        "price": price,
-        "color_hex": hex_color,
-        "season_tags": derive_season_tags(hex_color),
-        "silhouette": silhouette,
-        "occasion_tags": occasion_tags,
-        "location": f"Women's · Aisle {_LOCATION_AISLE[category]} · {_LOCATION_SECTION[category]}",
-        "sizes_in_stock": rng.choice(_SIZE_SETS),
-        "buy_url": "#",
-        "color_lab": hex_to_lab(hex_color),
-    }
-
-
-_CATEGORY_PREFIX = {"dress": "d", "top": "t", "pants": "p"}
-
-
-def assign_catalog_ids(catalog: list[dict]) -> None:
-    """Replace each entry's raw Kaggle numeric id with a short, stable
-    `<category-prefix><n>` id (d1, d2, ..., t1, ..., p1, ...) and rename its
-    image file to match.
-
-    Why not just keep the dataset's own ids (which is what earlier
-    iterations of this script did)? The rest of this codebase's test
-    suite (tests/test_engine.py, tests/test_tryon_route.py -- NOT owned by
-    this script/task) has pre-existing tests that hardcode a handful of
-    catalog ids from the placeholder seed data this catalog replaces:
-    "d1"/"d2" (expected to be an autumn- and a winter-tagged dress,
-    respectively, with d1 sorted first) and "p1" (any pants item). Rather
-    than reach into engine/router test files outside this task's scope to
-    update those hardcoded ids, we preserve the id *shape* they depend on.
-    Every other id is assigned arbitrarily in selection order.
-    """
-    dresses = [g for g in catalog if g["category"] == "dress"]
-    autumn_dress = next((g for g in dresses if "autumn" in g["season_tags"]), None)
-    winter_dress = next(
-        (g for g in dresses if g["season_tags"] == ["winter"] and g is not autumn_dress), None
-    )
-    if autumn_dress is not None and winter_dress is not None:
-        rest = [g for g in dresses if g is not autumn_dress and g is not winter_dress]
-        dresses = [autumn_dress, winter_dress] + rest
-
-    ordered_by_category = {
-        "dress": dresses,
-        "top": [g for g in catalog if g["category"] == "top"],
-        "pants": [g for g in catalog if g["category"] == "pants"],
-    }
-
-    new_catalog: list[dict] = []
-    for category, prefix in _CATEGORY_PREFIX.items():
-        for i, entry in enumerate(ordered_by_category[category], start=1):
-            old_id = entry["id"]
-            new_id = f"{prefix}{i}"
-            old_path = GARMENTS_DIR / f"{old_id}.jpg"
-            new_path = GARMENTS_DIR / f"{new_id}.jpg"
-            if old_path != new_path:
-                old_path.rename(new_path)
-            entry["id"] = new_id
-            entry["image_url"] = f"/garments/{new_id}.jpg"
-            new_catalog.append(entry)
-
-    catalog[:] = new_catalog
+    pool, pool_bins = crop[keep], flat[keep]
+    counts = np.bincount(pool_bins, minlength=_BINS ** 3)
+    chosen = int(np.argsort(counts)[::-1][bin_rank])
+    rep = pool[pool_bins == chosen].mean(axis=0)
+    return "#%02X%02X%02X" % tuple(int(c) for c in rep)
 
 
 # --------------------------------------------------------------------------
@@ -646,60 +470,56 @@ def assign_catalog_ids(catalog: list[dict]) -> None:
 # --------------------------------------------------------------------------
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cache-dir", default=None, help="where to cache styles.csv/images.csv")
-    parser.add_argument("--seed", type=int, default=RNG_SEED)
-    args = parser.parse_args()
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--no-fetch", action="store_true",
+                    help="reuse the images already in data/garments/")
+    ap.add_argument("--resume", action="store_true",
+                    help="skip ids whose image file is already on disk")
+    args = ap.parse_args()
 
-    cache_dir = Path(args.cache_dir) if args.cache_dir else Path(tempfile.gettempdir()) / "mirra_catalog_build"
-    cache_dir.mkdir(parents=True, exist_ok=True)
     GARMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    print(f"[1/5] fetching styles.csv + images.csv into {cache_dir} ...")
-    styles_path = fetch_styles_csv(cache_dir)
-    images_path = fetch_images_csv_via_range(cache_dir)
-    rows = read_styles_tolerant(styles_path)
-    images = read_images_csv(images_path)
-    print(f"      {len(rows)} style rows, {len(images)} image links")
-
-    rng = random.Random(args.seed)
-    print("[2/5] selecting colour-diverse candidates ...")
-    candidates = select_candidates(rows, images, rng)
-    for cat, items in candidates.items():
-        colours = sorted({r["baseColour"] for r in items})
-        print(f"      {cat}: {len(items)} candidates across {len(colours)} baseColours")
-
-    print("[3/5] downloading + processing images ...")
-    catalog: list[dict] = []
-    with httpx.Client(verify=SSL_CTX, follow_redirects=True) as client:
-        for category, items in candidates.items():
-            kept = 0
-            for row in items:
-                if kept >= TARGET_COUNTS[category]:
-                    break
-                url = images[row["id"]]
-                dest = GARMENTS_DIR / f"{row['id']}.jpg"
-                hex_color = download_and_process(url, dest, client, category)
-                if hex_color is None:
+    if not args.no_fetch:
+        print(f"[1/3] downloading {len(ITEMS)} product shots from {DATASET} ...")
+        with httpx.Client(verify=SSL_CTX, follow_redirects=True, timeout=120) as client:
+            for item in ITEMS:
+                dest = GARMENTS_DIR / f"{item['id']}.jpg"
+                if args.resume and dest.exists():
                     continue
-                catalog.append(build_entry(row, category, hex_color, rng))
-                kept += 1
-            if kept < TARGET_COUNTS[category]:
-                print(f"      WARNING: only got {kept}/{TARGET_COUNTS[category]} for {category}")
+                save_image(fetch_row_image(client, item["row"]), dest, item.get("crop"))
+                print(f"      {item['id']:>3}  row {item['row']:>6}  -> {dest.name}")
+    else:
+        print("[1/3] skipping download (--no-fetch)")
 
-    print("[4/5] assigning stable catalog ids ...")
-    assign_catalog_ids(catalog)
-
-    print(f"      writing {CATALOG_PATH} ({len(catalog)} items) ...")
+    print("[2/3] sampling colours + writing catalog ...")
+    catalog = []
+    for item in ITEMS:
+        path = GARMENTS_DIR / f"{item['id']}.jpg"
+        box = item.get("box") or DEFAULT_BOX[item["category"]]
+        hex_color = dominant_color(path, box, item.get("hex_bin", 0), item.get("skin", True))
+        catalog.append({
+            "id": item["id"],
+            "name": item["name"],
+            "category": item["category"],
+            "image_url": f"/garments/{item['id']}.jpg",
+            "price": item["price"],
+            "color_hex": hex_color,
+            # Placeholders: retag_catalog.py (run below) derives both from
+            # the colour and silhouette. Kept here only so the file is
+            # schema-valid at the moment it is written.
+            "season_tags": ["winter"],
+            "silhouette": item["silhouette"],
+            "occasion_tags": ["everyday"],
+            "location": LOCATION[item["category"]],
+            "sizes_in_stock": item["sizes"],
+            "buy_url": "#",
+            "color_lab": hex_to_lab(hex_color),
+        })
     CATALOG_PATH.write_text(json.dumps(catalog, indent=2) + "\n")
+    print(f"      wrote {CATALOG_PATH} ({len(catalog)} items)")
 
-    print("[5/5] summary:")
-    total_bytes = sum(f.stat().st_size for f in GARMENTS_DIR.glob("*.jpg"))
-    counts: dict[str, int] = {}
-    for g in catalog:
-        counts[g["category"]] = counts.get(g["category"], 0) + 1
-    print(f"      counts: {counts}")
-    print(f"      total image bytes: {total_bytes} ({total_bytes / 1024:.0f} KB)")
+    print("[3/3] re-deriving season/occasion tags ...")
+    subprocess.run([sys.executable, str(Path(__file__).with_name("retag_catalog.py"))], check=True)
 
 
 if __name__ == "__main__":

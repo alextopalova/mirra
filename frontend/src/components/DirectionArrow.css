@@ -15,13 +15,13 @@
   pointer-events: none;
 
   /* Scoped to this overlay only — deliberately not theme tokens (see above).
-     --arrow-side-face is the extra tone the 3D forward/backward arrows need
-     for their extruded side (a mid-grey, distinct from both the white lit
-     face and the near-black halo/outline) so the two faces read as
-     separate planes rather than merging into one flat silhouette. */
+     The one exception is the floor arrows' blue fill: it IS the app accent,
+     and it can safely follow the theme because its legibility comes from
+     the white outline and dark shadow around it, not from the fill's own
+     contrast with the video. */
   --arrow-on-video: #ffffff;
   --arrow-halo: rgba(0, 0, 0, 0.65);
-  --arrow-side-face: #6b6b6b;
+  --arrow-blue: var(--accent);
 }
 
 .direction-arrow-svg {
@@ -53,33 +53,32 @@
   stroke-width: 7;
 }
 
-/* Solid 3D forward/backward arrows. Both faces get their own dark outline
-   (paint-order puts the stroke under the fill) rather than a separate halo
-   path — for a filled shape that's the equivalent of the chevrons'
-   halo+core pair: it guarantees a dark edge against bright video behind
-   the light/mid-grey fills. */
-.direction-arrow-3d {
+/* Supplied floor-arrow artwork (forward/backward). Sized by HEIGHT, not
+   width: the two pieces are different proportions, so a shared width would
+   leave the taller one towering over the shorter. `width: auto` keeps each
+   one's own aspect from its viewBox. */
+.direction-arrow-art-svg {
+  height: min(62%, 340px);
+  width: auto;
+  max-width: 76%;
+  overflow: visible;
+}
+
+/* Blue fill, white outline, dark shadow — three layers because this sits on
+   unknown camera video: the outline separates the shape from whatever is
+   behind it, and the shadow keeps the outline itself from disappearing
+   against a bright background. The stroke paints OVER the fill (the source
+   artwork's own convention), so the internal seams stay visible and the
+   arrow reads as a solid object rather than a flat silhouette. */
+.direction-arrow-art {
+  fill: var(--arrow-blue);
+  stroke: var(--arrow-on-video);
+  stroke-width: 4;
+  stroke-linejoin: round;
+  paint-order: fill stroke;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.55));
   transform-box: fill-box;
   transform-origin: 50% 50%;
-}
-
-.direction-arrow-3d-side,
-.direction-arrow-3d-face {
-  paint-order: stroke fill;
-  stroke: var(--arrow-halo);
-  stroke-width: 3;
-  stroke-linejoin: round;
-}
-
-/* Extruded side face: darker, offset — reads as the shadowed flank of a
-   solid object rather than a flat icon. */
-.direction-arrow-3d-side {
-  fill: var(--arrow-side-face);
-}
-
-/* Lit top face. */
-.direction-arrow-3d-face {
-  fill: var(--arrow-on-video);
 }
 
 .direction-arrow--left .direction-arrow-chevron {
@@ -89,13 +88,14 @@
   animation: direction-arrow-nudge-right 1s ease-in-out infinite;
 }
 
-/* forward: the arrow nudges toward the viewer (down) — come closer. */
-.direction-arrow--forward .direction-arrow-3d {
-  animation: direction-arrow-nudge-down 1.15s ease-in-out infinite;
-}
-/* backward: the arrow nudges away from the viewer (up) — step back. */
-.direction-arrow--backward .direction-arrow-3d {
+/* Each arrow nudges the way it points, which with this artwork is the
+   opposite of the polygons it replaced: forward points up into the scene,
+   backward points down out at the viewer. */
+.direction-arrow--forward .direction-arrow-art {
   animation: direction-arrow-nudge-up 1.15s ease-in-out infinite;
+}
+.direction-arrow--backward .direction-arrow-art {
+  animation: direction-arrow-nudge-down 1.15s ease-in-out infinite;
 }
 
 @keyframes direction-arrow-nudge-left {
@@ -117,7 +117,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .direction-arrow-chevron,
-  .direction-arrow-3d {
+  .direction-arrow-art {
     animation: none !important;
   }
 }

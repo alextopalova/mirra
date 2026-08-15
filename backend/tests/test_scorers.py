@@ -1,18 +1,26 @@
 import itertools
+import math
+import re
+from pathlib import Path
 
 import pytest
 
-from app.reco.catalog import Garment
+from app.reco.catalog import Garment, hex_to_lab
 from app.reco.scorers import (
+    AVOID_SAME_SHADE_DE,
+    SEASON_AVOID_HEXES,
     SEASON_MATCH,
     SEASON_NEUTRAL,
     SEASON_OFF_SEASON_PENALTY,
     body_score,
     color_score,
+    is_avoided_color,
     occasion_score,
+    season_avoid_labs,
     season_score,
 )
 from app.schemas import BodyProfile
+from app.youcam.color import _SEASON_PALETTES
 
 
 def _g(**kw):
@@ -222,6 +230,122 @@ def test_season_score_always_within_unit_interval():
         for season in (None, "", "Autumn", "Winter", "banana"):
             s = season_score(_g(season_tags=tags), season)
             assert 0.0 <= s <= 1.0
+
+
+# --- avoided colours: the shades the profile screen says to skip -------
+
+
+def test_season_avoid_labs_resolves_the_season_family():
+    assert season_avoid_labs("Summer") == season_avoid_labs("Soft Summer")
+    assert season_avoid_labs("Fall") == season_avoid_labs("autumn")
+    assert len(season_avoid_labs("Winter")) == len(SEASON_AVOID_HEXES["winter"])
+
+
+def test_season_avoid_labs_is_empty_without_a_season_we_can_place():
+    # Same stance season_score takes: no signal, so no penalty. We only
+    # dock a shopper for a colour we're sure we told them to avoid.
+    for season in (None, "", "banana"):
+        assert season_avoid_labs(season) == []
+
+
+def test_is_avoided_color_catches_the_same_shade_by_another_name():
+    # Gold sits ~14 from the mustard a Summer is told to skip -- the same
+    # colour on a rail, under a different word on the tag.
+    avoid = season_avoid_labs("Summer")
+    assert is_avoided_color(hex_to_lab("#C9A54C"), [], avoid) is True
+
+
+def test_is_avoided_color_leaves_a_merely_adjacent_colour_alone():
+    # Navy is ~26 from black: not the shade Summer was warned off, and a
+    # colour that season genuinely wears. A radius that swallowed it would
+    # be a filter on half the store rather than an honest warning.
+    avoid = season_avoid_labs("Summer")
+    assert is_avoided_color(hex_to_lab("#24304F"), [], avoid) is False
+
+
+def test_is_avoided_color_defers_to_the_shoppers_own_palette():
+    # If the palette we showed the shopper contains the shade, that promise
+    # wins -- we never punish someone for wearing what we recommended.
+    avoid = season_avoid_labs("Summer")
+    mustard = hex_to_lab("#C9A227")
+    assert is_avoided_color(mustard, [], avoid) is True
+    assert is_avoided_color(mustard, [mustard], avoid) is False
+
+
+def test_is_avoided_color_is_false_without_an_avoid_list():
+    assert is_avoided_color([45, 12, 22], [[45, 12, 22]], []) is False
+    assert is_avoided_color([45, 12, 22], [[45, 12, 22]], None) is False
+
+
+def test_color_score_ignores_avoidance_and_stays_a_pure_palette_distance():
+    # The avoid verdict is priced by `rank()`, deliberately not folded in
+    # here (see color_score's docstring) -- this pins that split so a future
+    # change has to be a decision rather than an accident.
+    mustard = hex_to_lab("#C9A227")
+    assert color_score(mustard, [mustard]) == 1.0
+
+
+def test_no_season_both_recommends_and_warns_against_the_same_shade():
+    # The self-contradiction this table was fixed to remove: a season whose
+    # palette contains (near enough) a colour its own "Skip" list warns
+    # against argues with itself on one screen, and leaves `rank()` unable
+    # to tell which of the two promises to keep.
+    #
+    # The bar is twice the same-shade radius: with that much clear air
+    # between a recommended colour and a warned one, the triangle
+    # inequality says no garment can read as both.
+    min_separation = 2 * AVOID_SAME_SHADE_DE
+    for season, palette in _SEASON_PALETTES.items():
+        family = season.lower()
+        palette_labs = [hex_to_lab(h) for h in palette]
+        for avoid_hex in SEASON_AVOID_HEXES[family]:
+            avoid_lab = hex_to_lab(avoid_hex)
+            nearest = min(math.dist(avoid_lab, p) for p in palette_labs)
+            assert nearest >= min_separation, (
+                f"{season} tells the shopper to skip {avoid_hex} while "
+                f"recommending a colour {nearest:.1f} away from it"
+            )
+
+
+def test_no_garment_can_be_both_a_palette_colour_and_an_avoided_one():
+    # The consequence of the invariant above, stated the way `rank()`
+    # experiences it, over the palettes the kiosk actually serves.
+    for season, palette in _SEASON_PALETTES.items():
+        palette_labs = [hex_to_lab(h) for h in palette]
+        avoid_labs = season_avoid_labs(season)
+        for lab in palette_labs:
+            assert is_avoided_color(lab, palette_labs, avoid_labs) is False
+
+
+_STYLE_RULES_TS = (
+    Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "styleRules.ts"
+)
+
+
+def _frontend_skip_hexes() -> dict[str, list[str]]:
+    """The `SEASON_RULES[*].skip` hexes, read out of the frontend source."""
+    src = _STYLE_RULES_TS.read_text()
+    table = src.split("const SEASON_RULES", 1)[1]
+    out: dict[str, list[str]] = {}
+    for season, block in re.findall(
+        r"^  (\w+): \{(.*?)^  \},", table, re.S | re.M
+    ):
+        skip = re.search(r"skip: \[(.*?)\]", block, re.S)
+        out[season] = [h.upper() for h in re.findall(r'hex: "(#[0-9a-fA-F]{6})"', skip.group(1))]
+    return out
+
+
+def test_frontend_skip_list_mirrors_the_backend_avoid_table():
+    # The shopper reads these colours off the profile screen (frontend) and
+    # the rack is ranked against them (backend). Two copies of one piece of
+    # advice is a contradiction waiting to happen, so the copies are pinned
+    # to each other here -- a swatch changed on one side without the other
+    # fails this test rather than quietly recommending what it warns about.
+    if not _STYLE_RULES_TS.exists():
+        pytest.skip("frontend checkout not present")
+    frontend = _frontend_skip_hexes()
+    backend = {k: [h.upper() for h in v] for k, v in SEASON_AVOID_HEXES.items()}
+    assert frontend == backend
 
 
 def test_reasons_read_as_short_user_facing_copy():

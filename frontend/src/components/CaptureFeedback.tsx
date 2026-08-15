@@ -26,8 +26,14 @@ export function CaptureFeedback({ kind, exiting }: { kind: CaptureFeedbackKind; 
       ) : (
         <>
           <svg className="capture-feedback-icon capture-feedback-arrow" viewBox="0 0 100 100" aria-hidden="true">
-            <path className="capture-feedback-arc" d="M 66.00,22.29 A 32,32 0 1 1 22.29,34.00" />
-            <polygon className="capture-feedback-arrowhead" points="30.29,20.14 27.08,43.70 11.49,34.70" />
+            {/* Mirrored on this inner group rather than on the <svg>: the
+                element above already carries the nudge animation, and an
+                animated transform replaces any transform set alongside it
+                — the flip would simply be dropped every frame. */}
+            <g className="capture-feedback-arrow-mirror">
+              <path className="capture-feedback-arc" d="M 66.00,22.29 A 32,32 0 1 1 22.29,34.00" />
+              <polygon className="capture-feedback-arrowhead" points="30.29,20.14 27.08,43.70 11.49,34.70" />
+            </g>
           </svg>
           <p className="capture-feedback-text">Turn to your side</p>
         </>

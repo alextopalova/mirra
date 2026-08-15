@@ -131,13 +131,32 @@ interface SeasonRule {
   metals: string;
 }
 
+// The "Skip" swatches, and the two rules they have to obey.
+//
+// 1. MIRRORED in backend/app/reco/scorers.py (`SEASON_AVOID_HEXES`), which
+//    ranks the rack against exactly these colours. This list used to live
+//    only here, so the fitting room could put a shade the shopper had just
+//    been warned off at the top of the rail with a match percentage next
+//    to it. The backend's `test_scorers.py` reads this file and fails if
+//    the two lists drift — change one, change the other.
+//
+// 2. No colour here may be close to one in the SAME season's palette
+//    (backend/app/youcam/color.py `_SEASON_PALETTES`) — that would have the
+//    profile screen showing a shade as "yours" and "skip" at once, side by
+//    side. Two entries were reconciled for it: Spring's "Dusty mauve"
+//    (#A98BA0) was a hair from the dusty pink in Spring's own palette —
+//    near-identical swatches with near-identical names — and is now Taupe,
+//    which carries the warning Spring actually needs (muted and drab over
+//    clear); Autumn's icy pink and cool grey were too warm and too dark to
+//    sit clear of Autumn's camel and moss, and are now genuinely icy and
+//    genuinely cool.
 const SEASON_RULES: Record<string, SeasonRule> = {
   spring: {
     mood: "Warm · Clear · Bright",
     note: "Warm colours with light in them keep you looking awake. Clear over dusty, every time.",
     skip: [
       { name: "Black", hex: "#111111" },
-      { name: "Dusty mauve", hex: "#A98BA0" },
+      { name: "Taupe", hex: "#8B7D6B" },
       { name: "Charcoal", hex: "#36393E" },
     ],
     metals: "Gold and warm brass",
@@ -156,8 +175,8 @@ const SEASON_RULES: Record<string, SeasonRule> = {
     mood: "Warm · Rich · Earthy",
     note: "Deep, warm, earthy colours give your skin its glow. Richness beats brightness on you.",
     skip: [
-      { name: "Icy pink", hex: "#F1C6C2" },
-      { name: "Cool grey", hex: "#9AA0A8" },
+      { name: "Icy pink", hex: "#F2CBD5" },
+      { name: "Cool grey", hex: "#B9C0C7" },
       { name: "Pure black", hex: "#111111" },
     ],
     metals: "Gold, bronze and copper",
@@ -181,11 +200,18 @@ const SEASON_FALLBACK: SeasonRule = {
   metals: "Silver and gold both work",
 };
 
+/** "Fall" is the same family as "Autumn" — mirrors `season_family` in the
+ *  backend's scorers, which resolves it the same way. Without this the
+ *  rack would be ranked against Autumn's skip list while this screen
+ *  showed the shopper no skip list at all. */
+const SEASON_ALIASES: Record<string, string> = { fall: "autumn" };
+
 /** Matches on the season family so 12-season names ("Soft Summer", "Deep
  *  Autumn") resolve to the right advice instead of falling through. */
 export function seasonRule(season: string): SeasonRule {
   const s = season.toLowerCase();
-  const key = Object.keys(SEASON_RULES).find((k) => s.includes(k));
+  const alias = Object.keys(SEASON_ALIASES).find((a) => s.includes(a));
+  const key = alias ? SEASON_ALIASES[alias] : Object.keys(SEASON_RULES).find((k) => s.includes(k));
   return key ? SEASON_RULES[key] : SEASON_FALLBACK;
 }
 
