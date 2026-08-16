@@ -2,25 +2,46 @@
 
 **YouCam API Skin AI & Apparel VTO Hackathon · Track: Skin AI + Apparel VTO**
 
-Mirra is a smart-mirror kiosk for clothing stores. A shopper walks up, takes two photos, and in about a
-minute gets a personal style diagnosis — their **personal-colour palette** and their **body type** — then
-sees the store's own garments filtered to what actually suits them, **tries the pick on virtually right on
-the mirror**, and is told where to find it on the shop floor.
+Mirra is a styling assistant for clothing stores. A shopper takes two photos and, in about a minute, gets a
+personal style diagnosis — their **personal-colour palette** and their **body type** — then sees the store's
+own garments filtered to what suits them, **tries a pick on virtually**, and is told where to find it on the
+shop floor.
 
 It digitises the "total style diagnosis" (個人色彩 personal colour + 骨架分析 bone structure) that image
-consultants in Taiwan and Japan sell as a paid service — and then does the thing a salon can't: closes the
-loop straight into what's on the rack.
+consultants in Taiwan and Japan sell as a paid service, and connects it directly to what's on the rack.
+
+Mirra is a web app, so it needs no installation and runs on anything with a browser. The interface adapts to
+the screen it's on — a self-service kiosk, a shop-floor tablet, a laptop, or the shopper's own phone.
 
 ---
 
-## Why this, and why it's not a wrapper
+## Contents
 
-A real salon hands you a PDF and sends you off to guess. Mirra ends at a garment you can try on and buy.
+- [YouCam APIs used](#youcam-apis-used)
+- [Body typing](#body-typing)
+- [How it works](#how-it-works)
+- [Running it](#running-it)
+- [Repository layout](#repository-layout)
+- [Design notes](#design-notes)
+- [License](#license)
 
-The body-type diagnosis is **our own computer-vision pipeline**, not an API call — no YouCam endpoint (and,
-as far as we found, no competitor in this hackathon) does true silhouette typing from a body photo.
+---
 
-**Dual body typing.** Mirra reads the body two ways at once, because they answer different questions:
+## YouCam APIs used
+
+| API | Role in the product |
+|---|---|
+| **Apparel VTO — AI Clothes (`task/cloth`)** | Renders the recommended garment on the shopper's own photo. No fitting-room queue, no undressing. |
+| **AI Skin Tone / Facial Color Tones (`task/skin-tone-analysis`)** | Reads skin tone and undertone from the shopper's face; Mirra derives a seasonal palette from it, which drives colour matching against the catalogue in CIELab space. |
+
+*(`task/face-analyzer` was evaluated for neckline advice but returns 404 on the current API — dropped.)*
+
+## Body typing
+
+The body-type diagnosis is **our own computer-vision pipeline**, not an API call — no YouCam endpoint does
+silhouette typing from a body photo.
+
+Mirra reads the body two ways at once, because they answer different questions:
 
 | Lens | Output | Answers |
 |---|---|---|
@@ -29,15 +50,6 @@ as far as we found, no competitor in this hackathon) does true silhouette typing
 
 Together they drive the recommendation: *"Adds interest up top to balance hips"* (fruit) plus
 *"Soft, flowing fabric suits Wave"* (bone structure).
-
-## YouCam APIs used
-
-| API | Role in the product |
-|---|---|
-| **Apparel VTO — AI Clothes (`task/cloth`)** | The centrepiece. Renders the recommended garment on the shopper's own photo, on the mirror. No fitting-room queue, no undressing. |
-| **AI Skin Tone / Facial Color Tones (`task/skin-tone-analysis`)** | Reads skin tone and undertone from the shopper's face; Mirra derives a seasonal palette from it, which drives colour matching against the catalogue in CIELab space. |
-
-*(`task/face-analyzer` was evaluated for neckline advice but returns 404 on the current API — dropped.)*
 
 ## How it works
 
@@ -62,18 +74,6 @@ landmarks are hip *joint centres*, far narrower than the widest hip — using th
 wider than the hips (anatomically impossible) and classified our test subject as inverted-triangle. Measuring
 widths across the segmentation silhouette at landmark-derived heights fixed it. The pipeline refuses to emit
 an impossible measurement rather than returning a confidently wrong diagnosis.
-
-## Repository layout
-
-```
-backend/          FastAPI (Python 3.12)
-  app/cv/         measurement + dual classifier   ← the hero, thoroughly unit-tested (incl. the pure band-width math)
-  app/reco/       catalogue, scorers, ranking engine
-  app/youcam/     YouCam API client, VTO, colour   (CONTRACT.md = live-verified API contract)
-  app/routers/    /analyze-body, /recommend, /try-on
-frontend/         React 19 + TypeScript + Vite — the kiosk UI
-docs/superpowers/ design spec + implementation plan
-```
 
 ## Running it
 
@@ -100,30 +100,52 @@ Mocks are **on by default** so development doesn't burn API credits.
 
 **Tests**
 ```bash
-cd backend && . .venv/bin/activate && pytest -q     # 162 tests
+cd backend && . .venv/bin/activate && pytest -q     # 248 tests
+```
+
+**Deploying.** The backend needs native libraries (`libGL`, `libGLESv2`) that MediaPipe and OpenCV load at
+runtime, so it has to run as a container rather than a serverless function — `backend/Dockerfile` installs
+them and fetches the models at build time. `render.yaml` deploys it to Render as-is; the frontend is a static
+Vite build and hosts anywhere.
+
+## Repository layout
+
+```
+backend/            FastAPI (Python 3.12)
+  app/cv/           measurement + dual classifier   ← the hero, thoroughly unit-tested
+  app/reco/         catalogue, scorers, ranking engine
+  app/youcam/       YouCam API client, VTO, colour   (CONTRACT.md = live-verified API contract)
+  app/routers/      /analyze-body, /recommend, /try-on
+  data/             catalog.json + garments/ (70 self-hosted garment photos)
+  models/           MediaPipe weights, downloaded by scripts_setup_model.sh (not committed)
+  scripts/          catalogue build/retag and colour-calibration tooling
+  tests/            248 tests
+frontend/           React 19 + TypeScript + Vite
+  src/screens/      start → capture → measurements → analyzing → report → fitting room → get it
+  src/components/   pose guide, numeric keypad, body-type diagram, palette swatches, glass panels
+  src/lib/          pose fit, auto-capture, colour naming, style rules
+  src/api/          typed client for the backend
+docs/superpowers/   design spec + implementation plan
+render.yaml         backend deployment blueprint
 ```
 
 ## Design notes
 
-- **Kiosk-first.** Grey/blue liquid-glass UI, ≥72px touch targets, an on-screen numeric keypad (kiosks have
-  no keyboard), a pose-guide overlay telling the shopper where to stand, and a 90s idle reset for the next
-  customer — deliberately suspended during analysis and try-on so a generation is never interrupted.
+- **Built for a kiosk first, comfortable everywhere.** Grey/blue liquid-glass UI, ≥72px touch targets, an
+  on-screen numeric keypad (kiosks have no keyboard), a pose-guide overlay telling the shopper where to
+  stand, and a 90s idle reset for the next customer — deliberately suspended during analysis and try-on so a
+  generation is never interrupted.
 - **The style report is a stopover, not a destination.** One dominant CTA pushes to try-on; the mirror is
   the point.
 - **Nothing blocks the scan.** A failed colour read, an unusable side photo, or a YouCam outage all degrade
   gracefully — the shopper still gets a body diagnosis and a rack.
-- **Extensible by design.** Recommendations are a pluggable scorer pipeline (colour × body × occasion);
-  weather or loyalty-data scorers drop in without touching the core.
-
-## Limitations (honest)
-
-- The catalogue is a seeded 15-garment stand-in for a store's real inventory feed.
-- Body-type thresholds are tuned against anatomical reasoning and a small number of photos, not a labelled
-  dataset.
-- Colour analysis needs a forward-facing face; when the API can't read one it falls back to a default
-  palette rather than failing the scan.
-- "Add to bag" is a handoff — there's no real payment integration.
+- **Extensible by design.** Recommendations are a pluggable scorer pipeline (colour × body × occasion ×
+  season); weather or loyalty-data scorers drop in without touching the core.
 
 ## License
 
-MIT
+Released under the **MIT License** — see [LICENSE](LICENSE).
+
+You are free to use, copy, modify, merge, publish, distribute, sublicense and sell this software, including
+commercially, for any purpose. The only condition is that the copyright notice and permission notice are
+included in copies. The software is provided as-is, without warranty of any kind.
