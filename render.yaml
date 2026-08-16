@@ -1,0 +1,46 @@
+# Render Blueprint for the Mirra backend.
+#
+# Why Render and not Vercel: app/routers/body.py imports cv2 at module scope,
+# and the OpenCV that MediaPipe pulls in needs the native library libGL.so.1.
+# Vercel's Python runtime image doesn't ship it and there's no way to install
+# system packages into a serverless function, so every invocation died with
+# `ImportError: libGL.so.1` before a single route ran -- including /health.
+# backend/Dockerfile apt-installs libgl1, so a container host is the fix.
+#
+# The MediaPipe weights (~9MB pose + ~250KB segmenter) are git-ignored and are
+# fetched at image build time by backend/scripts_setup_model.sh, which the
+# Dockerfile runs. Nothing extra is needed here to provision them.
+
+services:
+  - type: web
+    name: mirra-backend
+    runtime: docker
+    plan: free
+    region: frankfurt
+
+    # Paths resolve inside rootDir. The Dockerfile does `COPY . .`, so the
+    # build context has to be backend/, not the repo root.
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+
+    healthCheckPath: /health
+
+    envVars:
+      # app/main.py passes this single value to CORSMiddleware's allow_origins,
+      # so it must be the exact scheme+host the browser sends as Origin, with
+      # no trailing slash. Vercel preview deployments get their own hostnames
+      # and will NOT be allowed by this -- only the production domain is.
+      - key: ALLOWED_ORIGIN
+        value: https://mirra-smart-try-on.vercel.app
+
+      # Real YouCam calls, not the fixed placeholder palette. See
+      # app/config.py and app/youcam/CONTRACT.md.
+      - key: USE_MOCKS
+        value: "false"
+
+      # Secrets: set in the Render Dashboard, never committed.
+      - key: YOUCAM_API_KEY
+        sync: false
+      - key: YOUCAM_API_SECRET
+        sync: false
