@@ -2,6 +2,13 @@ node_modules/
 .next/
 .env*
 !.env.example
+# Build configuration, not credentials: it holds one flag that puts the
+# deployed frontend into mock mode, because a static deployment has no
+# backend behind it. It has to be committed or the hosted build has no way
+# to know that. A platform env var still overrides it — Vite applies
+# process.env over .env files — so pointing a deployment at a real API
+# later needs no code change.
+!frontend/.env.production
 .DS_Store
 __pycache__/
 *.pyc

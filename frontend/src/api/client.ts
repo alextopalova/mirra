@@ -75,17 +75,25 @@ export async function recommend(input: {
   return r.json();
 }
 
-/** Resolve a garment `image_url` against the API origin.
+/** Resolve a garment `image_url` to something the browser can load.
  *
  * Catalog entries store `image_url` as either a relative path served by
  * the backend's static mount (e.g. "/garments/d1.jpg" -- see
  * backend/app/main.py) or, for any not-yet-migrated entry, a
  * fully-qualified http(s) URL to a third party. Every screen that renders
  * a garment image should route through this single helper rather than
- * using `image_url` directly, so the resolution rule lives in one place. */
+ * using `image_url` directly, so the resolution rule lives in one place.
+ *
+ * In mock mode the same paths are served by the FRONTEND, from
+ * public/garments (mirrored there by backend/scripts/sync_mock_catalog.py),
+ * so they must stay relative and resolve against this origin. Prefixing
+ * them with the API base is what made a deployed mock build show a rack of
+ * broken images: there is no backend behind a static deployment, so every
+ * photo pointed at a host that wasn't answering. */
 export function resolveImageUrl(imageUrl: string): string {
   if (/^https?:\/\//i.test(imageUrl)) return imageUrl;
-  return `${BASE}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
+  const path = imageUrl.startsWith("/") ? imageUrl : `/${imageUrl}`;
+  return USE_MOCKS ? path : `${BASE}${path}`;
 }
 
 /** The stand-in "scan", already resolved to a loadable URL — the capture
