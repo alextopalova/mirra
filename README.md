@@ -1,17 +1,17 @@
-# Mirra — the in-store styling mirror
+# Mirra - Smart Try-on
 
-**YouCam API Skin AI & Apparel VTO Hackathon · Track: Skin AI + Apparel VTO**
+**YouCam API Skin AI & Apparel VTO Hackathon. Track: Skin AI + Apparel VTO**
 
 Mirra is a styling assistant for clothing stores. A shopper takes two photos and, in about a minute, gets a
-personal style diagnosis — their **personal-colour palette** and their **body type** — then sees the store's
+personal style diagnosis - their **personal-colour palette** and their **body type**. The customer then sees the store's
 own garments filtered to what suits them, **tries a pick on virtually**, and is told where to find it on the
 shop floor.
 
-It digitises the "total style diagnosis" (個人色彩 personal colour + 骨架分析 bone structure) that image
-consultants in Taiwan and Japan sell as a paid service, and connects it directly to what's on the rack.
+It digitizes the "total style diagnosis" (個人色彩 personal colour + 骨架分析 bone structure) that image
+consultants sell as a paid service, and connects it directly to what's on the rack.
 
-Mirra is a web app, so it needs no installation and runs on anything with a browser. The interface adapts to
-the screen it's on — a self-service kiosk, a shop-floor tablet, a laptop, or the shopper's own phone.
+Mirra is meant to work with **any store clothing catalog** and is a web app, so it runs on **any device with a browser**. The interface adapts to
+the screen it's on, whether it's a self-service kiosk, a shop-floor tablet, a laptop, or the shopper's own phone.
 
 ---
 
@@ -31,22 +31,19 @@ the screen it's on — a self-service kiosk, a shop-floor tablet, a laptop, or t
 
 | API | Role in the product |
 |---|---|
-| **Apparel VTO — AI Clothes (`task/cloth`)** | Renders the recommended garment on the shopper's own photo. No fitting-room queue, no undressing. |
+| **Apparel VTO - AI Clothes (`task/cloth`)** | Renders the recommended garment on the shopper's own photo. No fitting-room queue, no undressing. |
 | **AI Skin Tone / Facial Color Tones (`task/skin-tone-analysis`)** | Reads skin tone and undertone from the shopper's face; Mirra derives a seasonal palette from it, which drives colour matching against the catalogue in CIELab space. |
-
-*(`task/face-analyzer` was evaluated for neckline advice but returns 404 on the current API — dropped.)*
 
 ## Body typing
 
-The body-type diagnosis is **our own computer-vision pipeline**, not an API call — no YouCam endpoint does
-silhouette typing from a body photo.
+The body-type diagnosis is a **self-developed computer-vision pipeline**.
 
 Mirra reads the body two ways at once, because they answer different questions:
 
-| Lens | Output | Answers |
-|---|---|---|
-| Western "fruit" shapes | pear / apple / hourglass / rectangle / inverted-triangle | **where** to balance volume |
-| Japanese 骨格診断 | Straight (直筒) / Wave (波浪) / Natural (自然), as weighted scores | **how** a garment should feel — fabric, structure, waist |
+| Lens                            | Output | Answers |
+|---------------------------------|---|---|
+| Western "fruit" shapes          | pear / apple / hourglass / rectangle / inverted-triangle | **where** to balance volume |
+| 3-type body classification <br/>骨格診断 | Straight (直筒) / Wave (波浪) / Natural (自然), as weighted scores | **how** a garment should feel - fabric, structure, waist |
 
 Together they drive the recommendation: *"Adds interest up top to balance hips"* (fruit) plus
 *"Soft, flowing fabric suits Wave"* (bone structure).
@@ -55,10 +52,10 @@ Together they drive the recommendation: *"Adds interest up top to balance hips"*
 
 ```
 front photo ─┐
-side photo  ─┤─► MediaPipe Pose + segmentation ─► silhouette widths @ shoulder/bust/waist/hip
+side photo  ─┤─► MediaPipe Pose + segmentation ─► silhouette widths at shoulder/bust/waist/hip
 height+weight┘                                          │
                                     ┌───────────────────┴────────────────┐
-                            FRUIT shape                        JAPANESE 3-type
+                            FRUIT shape                                3-type
                                     └───────────────────┬────────────────┘
 face crop ──► YouCam Skin Tone ──► undertone + depth ──► seasonal palette
                                                         │
@@ -69,11 +66,7 @@ face crop ──► YouCam Skin Tone ──► undertone + depth ──► seaso
                         YouCam Apparel VTO ──► "here's you in it" ──► where to find it in store
 ```
 
-**Measuring from the silhouette, not the landmarks, is the thing that makes it work.** MediaPipe's hip
-landmarks are hip *joint centres*, far narrower than the widest hip — using them directly produced a waist
-wider than the hips (anatomically impossible) and classified our test subject as inverted-triangle. Measuring
-widths across the segmentation silhouette at landmark-derived heights fixed it. The pipeline refuses to emit
-an impossible measurement rather than returning a confidently wrong diagnosis.
+**Measuring from the silhouette, not the landmarks, is the thing that makes it work.**
 
 ## Running it
 
@@ -103,10 +96,7 @@ Mocks are **on by default** so development doesn't burn API credits.
 cd backend && . .venv/bin/activate && pytest -q     # 248 tests
 ```
 
-**Deploying.** The backend needs native libraries (`libGL`, `libGLESv2`) that MediaPipe and OpenCV load at
-runtime, so it has to run as a container rather than a serverless function — `backend/Dockerfile` installs
-them and fetches the models at build time. `render.yaml` deploys it to Render as-is; the frontend is a static
-Vite build and hosts anywhere.
+**Deploying.** The frontend is deployed on Vercel and the backend runs as a Render service.
 
 ## Repository layout
 
@@ -133,18 +123,18 @@ render.yaml         backend deployment blueprint
 
 - **Built for a kiosk first, comfortable everywhere.** Grey/blue liquid-glass UI, ≥72px touch targets, an
   on-screen numeric keypad (kiosks have no keyboard), a pose-guide overlay telling the shopper where to
-  stand, and a 90s idle reset for the next customer — deliberately suspended during analysis and try-on so a
+  stand, and a 90s idle reset for the next customer - deliberately suspended during analysis and try-on so a
   generation is never interrupted.
 - **The style report is a stopover, not a destination.** One dominant CTA pushes to try-on; the mirror is
   the point.
 - **Nothing blocks the scan.** A failed colour read, an unusable side photo, or a YouCam outage all degrade
-  gracefully — the shopper still gets a body diagnosis and a rack.
+  gracefully - the shopper still gets a body diagnosis and a rack.
 - **Extensible by design.** Recommendations are a pluggable scorer pipeline (colour × body × occasion ×
   season); weather or loyalty-data scorers drop in without touching the core.
 
 ## License
 
-Released under the **MIT License** — see [LICENSE](LICENSE).
+Released under the **MIT License** - see [LICENSE](LICENSE).
 
 You are free to use, copy, modify, merge, publish, distribute, sublicense and sell this software, including
 commercially, for any purpose. The only condition is that the copyright notice and permission notice are
