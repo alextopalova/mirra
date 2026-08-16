@@ -61,12 +61,37 @@ face crop ──► YouCam Skin Tone ──► undertone + depth ──► seaso
                                                         │
                         category + occasion ────────────┤
                                                         ▼
-              scorers: colour (CIELab ΔE) × body-fit rules × occasion  ──► ranked rack
+        scorers: colour (CIELab ΔE) × body fit × season × occasion  ──► ranked rack
                                                         ▼
                         YouCam Apparel VTO ──► "here's you in it" ──► where to find it in store
 ```
 
 **Measuring from the silhouette, not the landmarks, is the thing that makes it work.**
+
+### Filtering and scoring
+
+Category is a hard filter - ask for dresses, get dresses. **Season and occasion filter too**, rather than
+just nudging the order: a shopper who picks "work" is asking to see work clothes, and a rack that merely
+reshuffles the same items reads as broken. Garments matching both are *exact*; if there are fewer than four,
+the best remaining pieces in the category fill the rail and are flagged so the screen can label them.
+
+Everything that survives the filter is scored on four weighted facets:
+
+| Facet | Weight | Measures |
+|---|---|---|
+| **Body fit** | 35% | silhouette rules keyed to the fruit shape *and* the 3-type result |
+| **Colour** | 30% | perceptual distance (CIELab ΔE) from the garment to the shopper's palette |
+| **Season** | 25% | agreement with the diagnosed colour season |
+| **Occasion** | 10% | what they came in to shop for |
+
+A shade the shopper's palette told them to skip takes a flat deduction off that total - a yes/no verdict
+deserves a flat price, not a fifth sliding facet. It stays a penalty rather than a filter, so an off-palette
+piece keeps its body and occasion credit and can still surface when the store has nothing better, which is
+the honest answer when it doesn't.
+
+Each garment carries up to two plain-language reasons. The "palette match" line is only claimed when the
+colour match is genuinely on-season, so the rack never sells a garment on a compliment it can't back up. The
+rail is then sorted purely by the percentage printed on the card.
 
 ## Running it
 
