@@ -61,10 +61,20 @@
   border-radius: var(--radius);
   overflow: hidden;
 }
-/* `contain`, not `cover`: this is the shopper's own body and a garment on
-   it — cropping either to fill a box is the one thing this panel must not
-   do. The tinted ground behind it is a deliberate mat, not dead space. */
-.preview-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+/* `cover`: fill the frame, cropping whichever axis overflows, rather than
+   letterboxing inside it. This reverses an earlier decision — the panel
+   used `contain` on the argument that cropping a shopper's own body was
+   the one thing it must not do, and the cost was a scan floating between
+   two tinted bars on every kiosk.
+ *
+ * What actually gets cropped, given the frame runs about 0.75 w/h: the
+ * catalog photos (500x500 and 500x600, so 0.83-1.0) are wider than the
+ * frame, so they lose their SIDES — background, not body. A camera scan
+ * (1024x1536, 0.67) is narrower, so it loses a few percent top and bottom
+ * instead; centred, that is trimmed headroom and floor, split evenly,
+ * rather than a foot or a head. No `object-position` override for exactly
+ * that reason — pinning to `top` would put the whole trim on the feet. */
+.preview-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .preview-empty { position: absolute; inset: 0; display: grid; place-items: center;
   padding: 24px; text-align: center; font-size: 16px; color: var(--ink-mute); }
 
@@ -111,22 +121,34 @@
 /* Two dropdowns, side by side, one row. See FittingRoomScreen.tsx for why
    this replaced eleven chips across two rows.
 
-   Shaped exactly like the height/weight field on the measurements screen —
-   label above, recessed box below, unit-sized chevron in a soft disc — so
-   the kiosk teaches that control once and reuses it. Sizes are clamps
-   whose upper bound is the 1080px-kiosk value, same convention as
-   measurements.css. */
-.filters { display: flex; gap: clamp(10px, 1.9vw, 20px); flex-shrink: 0; }
+   Shaped like the height/weight field on the measurements screen — label
+   above, recessed box below, chevron in a soft disc — so the kiosk teaches
+   that control once and reuses it.
+ *
+ * FIXED sizes, not clamps, unlike the rest of this screen. These were
+ * viewport-scaled and it was a mistake twice over. Scaled to the kiosk's
+ * width they became 116px tall with 30px text — a filter touched once or
+ * twice a session, sized like the primary action. And because the radius
+ * stayed a fixed 28px while the height moved between 56 and 116px, the
+ * corner ate a different share of the box at every size: a rounded
+ * rectangle on a phone, very nearly a pill on the kiosk. One size and one
+ * radius everywhere fixes both, and a filter has no reason to be bigger on
+ * a big screen — it is read at the same distance either way. */
+.filters { display: flex; gap: 16px; flex-shrink: 0; }
 
-.filter-field { position: relative; flex: 1; min-width: 0; }
+/* Capped rather than free-growing: at `flex: 1` on a 1440px desktop each
+   dropdown stretched to 655px, which reads as a banner rather than a
+   control. Below 2 x 320 + gap they still share the row evenly, so a
+   phone is unaffected. */
+.filter-field { position: relative; flex: 1 1 0; min-width: 0; max-width: 320px; }
 
 .filter-label {
   display: block;
-  font-size: clamp(13px, 2vw, 22px);
+  font-size: 14px;
   font-weight: 600;
   color: var(--ink-dim);
   padding-left: 6px;
-  margin-bottom: clamp(5px, 1.1vw, 12px);
+  margin-bottom: 7px;
 }
 
 /* `appearance: none` strips the platform's own control chrome so the box
@@ -135,15 +157,18 @@
 .filter-select {
   appearance: none;
   width: 100%;
-  min-height: clamp(56px, 10.7vw, 116px);
-  padding: 0 clamp(52px, 8.5vw, 92px) 0 clamp(14px, 2.6vw, 28px);
+  min-height: 68px;
+  padding: 0 60px 0 20px;
   font-family: var(--font);
-  font-size: clamp(16px, 2.8vw, 30px);
+  font-size: 19px;
   font-weight: 700;
   color: var(--ink);
   background: var(--surface);
   border: 2px solid var(--hairline);
-  border-radius: var(--radius-lg);
+  /* A literal 16px, not var(--radius-lg): the token is sized for cards and
+     panels, and on a 68px control it would round the corners most of the
+     way to a pill. */
+  border-radius: 16px;
   box-shadow: inset 0 2px 6px rgba(38, 54, 110, 0.06);
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -156,16 +181,14 @@
    instead of a hole in it. */
 .filter-chevron {
   position: absolute;
-  right: clamp(10px, 2vw, 22px);
-  /* Centred in the select by construction — (select height - disc height) / 2,
-     repeating the two clamps rather than guessing an offset. A fixed offset
-     only lands on the centre at one viewport width and drifts either side
-     of it, which is exactly what a hand-tuned value did here. `bottom`
-     rather than `top` because the label above the select is part of this
-     positioning context and its height moves with the type scale. */
-  bottom: calc((clamp(56px, 10.7vw, 116px) - clamp(40px, 6.3vw, 68px)) / 2);
-  width: clamp(40px, 6.3vw, 68px);
-  height: clamp(40px, 6.3vw, 68px);
+  right: 14px;
+  /* (68 - 40) / 2. `bottom` rather than `top` because the label above the
+     select is part of this positioning context. Now that both terms are
+     fixed this is just a number, and it lands on the centre at every
+     viewport instead of only one. */
+  bottom: 14px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -176,11 +199,11 @@
 }
 .filter-chevron::before {
   content: "";
-  width: clamp(9px, 1.4vw, 15px);
-  height: clamp(9px, 1.4vw, 15px);
-  margin-top: -0.35em;
-  border-right: clamp(2px, 0.37vw, 4px) solid currentColor;
-  border-bottom: clamp(2px, 0.37vw, 4px) solid currentColor;
+  width: 9px;
+  height: 9px;
+  margin-top: -3px;
+  border-right: 3px solid currentColor;
+  border-bottom: 3px solid currentColor;
   transform: rotate(45deg);
 }
 
